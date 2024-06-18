@@ -1,11 +1,11 @@
-# 📦 Streamlit App Starter Kit 
+# 📦 Crime.Prediction.Hotspot.Web 
 ```
 ⬆️ (Replace above with your app's name)
 ```
 
 Description of the app ...
 
-## Demo App
+## Crime Prediction Hotspot
 
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://ml-model-builder-template.streamlit.app/)
 
