@@ -9,8 +9,8 @@ import time
 import zipfile
 
 # Page title
-st.set_page_config(page_title='Crime Hotspot Interpratble ML Model Building', page_icon='🤖' , layout='wide')
-st.title('🤖 Crime Hotspot Interpratble ML Model Building')
+st.set_page_config(page_title='ML Model Building', page_icon='🤖')
+st.title('🤖 ML Model Building')
 
 with st.expander('About this app'):
   st.markdown('**What can this app do?**')
@@ -21,7 +21,7 @@ with st.expander('About this app'):
 
   st.markdown('**Under the hood**')
   st.markdown('Data sets:')
-  st.code('''- Crime data set South Africa
+  st.code('''- Drug solubility data set
   ''', language='markdown')
   
   st.markdown('Libraries used:')
