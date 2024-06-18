@@ -1,8 +1,8 @@
-# 📦 Crime.Prediction.Hotspot.Web 
+# 📦 Crime.Hotspot.Prediction.Web 
 
 Description of the app ...
 
-## Crime Prediction Hotspot
+## Crime Hotspot Prediction 
 
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://ml-model-builder-template.streamlit.app/)
 
