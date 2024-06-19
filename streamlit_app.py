@@ -7,59 +7,113 @@ from sklearn.metrics import mean_squared_error, r2_score
 import altair as alt
 import time
 import zipfile
+from Request.crimecategoriesRequest import fetch_data
 
-# Page title
-st.set_page_config(page_title='Crime Hotspot Interpratble ML Model Building', page_icon='🤖' , layout='wide')
-st.title('🤖 Crime Hotspot Interpratble ML Model Building')
+# Move the set_page_config() to be the very first Streamlit command
+st.set_page_config(page_title='ML Model Building', page_icon='🤖', layout='wide')
+
+# Initialize variables
+uploaded_file = None
+example_data = None
+
+# After setting the page config, you can proceed with the rest of your code
+st.title('🤖 ML Model Building')
 
 with st.expander('About this app'):
-  st.markdown('**What can this app do?**')
-  st.info('This app allow users to build a machine learning (ML) model in an end-to-end workflow. Particularly, this encompasses data upload, data pre-processing, ML model building and post-model analysis.')
+    st.markdown('**What can this app do?**')
+    st.info('This app allows users to build a machine learning (ML) model in an end-to-end workflow. Particularly, this encompasses data upload, data pre-processing, ML model building and post-model analysis.')
 
-  st.markdown('**How to use the app?**')
-  st.warning('To engage with the app, go to the sidebar and 1. Select a data set and 2. Adjust the model parameters by adjusting the various slider widgets. As a result, this would initiate the ML model building process, display the model results as well as allowing users to download the generated models and accompanying data.')
+    st.markdown('**How to use the app?**')
+    st.warning('To engage with the app, go to the sidebar and 1. Select a data set and 2. Adjust the model parameters by adjusting the various slider widgets. This will initiate the ML model building process, display the model results, and allow users to download the generated models and accompanying data.')
 
-  st.markdown('**Under the hood**')
-  st.markdown('Data sets:')
-  st.code('''- Crime data set South Africa
-  ''', language='markdown')
+    st.markdown('**Under the hood**')
+    st.markdown('Data sets:')
+    st.code('''- Drug solubility data set
+    ''', language='markdown')
   
-  st.markdown('Libraries used:')
-  st.code('''- Pandas for data wrangling
+    st.markdown('Libraries used:')
+    st.code('''- Pandas for data wrangling
 - Scikit-learn for building a machine learning model
 - Altair for chart creation
 - Streamlit for user interface
-  ''', language='markdown')
-
+    ''', language='markdown')
 
 # Sidebar for accepting input parameters
 with st.sidebar:
-    # Load data
     st.header('1.1. Input data')
 
-    st.markdown('**1. Use custom data**')
-    uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"])
-    if uploaded_file is not None:
-        df = pd.read_csv(uploaded_file, index_col=False)
-      
-    # Download example data
-    @st.cache_data
-    def convert_df(input_df):
-        return input_df.to_csv(index=False).encode('utf-8')
-    example_csv = pd.read_csv('https://raw.githubusercontent.com/dataprofessor/data/master/delaney_solubility_with_descriptors.csv')
-    csv = convert_df(example_csv)
-    st.download_button(
-        label="Download example CSV",
-        data=csv,
-        file_name='delaney_solubility_with_descriptors.csv',
-        mime='text/csv',
-    )
+    # Initialize df
+    df = pd.DataFrame()
 
-    # Select example data
-    st.markdown('**1.2. Use example data**')
-    example_data = st.toggle('Load example data')
-    if example_data:
+    inputdatatype = st.radio('Select input data type', options=['Use example data', 'Use custom data', 'Use database data'], index=0)
+
+    if inputdatatype == 'Use example data':
+        st.markdown('**1. Use example data**')
+        example_data = inputdatatype
         df = pd.read_csv('https://raw.githubusercontent.com/dataprofessor/data/master/delaney_solubility_with_descriptors.csv')
+        #print('Example dataframe: ', df)
+    elif inputdatatype == 'Use custom data':
+        st.markdown('**1. Use custom data**')
+        uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"])
+        if uploaded_file is not None:
+            df = pd.read_csv(uploaded_file, index_col=False)
+        else:
+            st.info('Upload a CSV file to load data.')
+      
+        @st.cache_data  # Use st.cache_data instead of st.cache.resource
+        def convert_df(input_df):
+            return input_df.to_csv(index=False).encode('utf-8')
+        
+        example_csv = pd.read_csv('https://raw.githubusercontent.com/dataprofessor/data/master/delaney_solubility_with_descriptors.csv')
+        csv = convert_df(example_csv)
+        st.download_button(
+            label="Download example CSV",
+            data=csv,
+            file_name='delaney_solubility_with_descriptors.csv',
+            mime='text/csv',
+        )
+    else:
+        st.markdown('**1. Use database data**')
+        with st.expander('Select Input Parameters'):
+            province_mapping = {
+                'Western Cape': 'ZA.WC',
+                'Eastern Cape': 'ZA.EC',
+                'Free State': 'ZA.FS',
+                'Gauteng': 'ZA.GP',
+                'Mpumalanga': 'ZA.MP',
+                'Northern Cape': 'ZA.NC',
+                'KwaZulu-Natal': 'ZA.NL',
+                'Limpopo': 'ZA.NP',
+                'North-West': 'ZA.NW',
+            }
+            provincecode = st.selectbox('Select Province', options=list(province_mapping.keys()), format_func=lambda x: x, index=0)
+            provincecode_value = province_mapping[provincecode]
+
+            policestation_mapping = {
+                'Parow': 'PRW104WC',
+                'Athlone': 'AT03WC',
+                'Bellville': 'BV08WC ',
+                'Bishop Lavis': 'BL010WC',
+                'Gugulethu': 'GUG49WC',
+                'Khayelitsha': 'KHL57WC',
+                'Manenberg': 'MBG83WC'
+            }
+            policestationcode = st.selectbox('Select Police Station', options=list(policestation_mapping.keys()), format_func=lambda x: x, index=0)
+            policestationcode_value = policestation_mapping[policestationcode]
+
+            year_mapping = st.slider('Select year range from 2016 - 2023', 2016, 2023)
+            quarter = st.radio('Select quarter of year', options=[1, 2, 3, 4], index=0)
+
+        if st.button('Fetch Data'):
+            if not provincecode_value:
+                st.error('Please select a valid province.')
+            elif not policestationcode_value:
+                st.error('Please select a valid police station.')
+        else:
+            db_data = fetch_data(provincecode_value, policestationcode_value, year_mapping, quarter)
+            #print('Fetch data: ',db_data)
+            df = pd.DataFrame(db_data)
+            print('Fetch dataframe: ', df)
 
     st.header('2. Set Parameters')
     parameter_split_size = st.slider('Data split ratio (% for Training Set)', 10, 90, 80, 5)
@@ -80,7 +134,6 @@ with st.sidebar:
 
     sleep_time = st.slider('Sleep time', 0, 3, 0)
 
-# Initiate the model building process
 if uploaded_file or example_data: 
     with st.status("Running ...", expanded=True) as status:
     
@@ -104,14 +157,14 @@ if uploaded_file or example_data:
             parameter_max_features_metric = X.shape[1]
         
         rf = RandomForestRegressor(
-                n_estimators=parameter_n_estimators,
-                max_features=parameter_max_features,
-                min_samples_split=parameter_min_samples_split,
-                min_samples_leaf=parameter_min_samples_leaf,
-                random_state=parameter_random_state,
-                criterion=parameter_criterion,
-                bootstrap=parameter_bootstrap,
-                oob_score=parameter_oob_score)
+            n_estimators=parameter_n_estimators,
+            max_features=parameter_max_features,
+            min_samples_split=parameter_min_samples_split,
+            min_samples_leaf=parameter_min_samples_leaf,
+            random_state=parameter_random_state,
+            criterion=parameter_criterion,
+            bootstrap=parameter_bootstrap,
+            oob_score=parameter_oob_score)
         rf.fit(X_train, y_train)
         
         st.write("Applying model to make predictions ...")
@@ -129,28 +182,25 @@ if uploaded_file or example_data:
         st.write("Displaying performance metrics ...")
         time.sleep(sleep_time)
         parameter_criterion_string = ' '.join([x.capitalize() for x in parameter_criterion.split('_')])
-        #if 'Mse' in parameter_criterion_string:
-        #    parameter_criterion_string = parameter_criterion_string.replace('Mse', 'MSE')
+            
         rf_results = pd.DataFrame(['Random forest', train_mse, train_r2, test_mse, test_r2]).transpose()
         rf_results.columns = ['Method', f'Training {parameter_criterion_string}', 'Training R2', f'Test {parameter_criterion_string}', 'Test R2']
-        # Convert objects to numerics
+            
         for col in rf_results.columns:
             rf_results[col] = pd.to_numeric(rf_results[col], errors='ignore')
-        # Round to 3 digits
         rf_results = rf_results.round(3)
         
     status.update(label="Status", state="complete", expanded=False)
 
-    # Display data info
     st.header('Input data', divider='rainbow')
     col = st.columns(4)
     col[0].metric(label="No. of samples", value=X.shape[0], delta="")
     col[1].metric(label="No. of X variables", value=X.shape[1], delta="")
     col[2].metric(label="No. of Training samples", value=X_train.shape[0], delta="")
     col[3].metric(label="No. of Test samples", value=X_test.shape[0], delta="")
-    
+        
     with st.expander('Initial dataset', expanded=True):
-        st.dataframe(df, height=210, use_container_width=True)
+            st.dataframe(df, height=210, use_container_width=True)
     with st.expander('Train split', expanded=False):
         train_col = st.columns((3,1))
         with train_col[0]:
@@ -168,13 +218,12 @@ if uploaded_file or example_data:
             st.markdown('**y**')
             st.dataframe(y_test, height=210, hide_index=True, use_container_width=True)
 
-    # Zip dataset files
     df.to_csv('dataset.csv', index=False)
     X_train.to_csv('X_train.csv', index=False)
     y_train.to_csv('y_train.csv', index=False)
     X_test.to_csv('X_test.csv', index=False)
     y_test.to_csv('y_test.csv', index=False)
-    
+        
     list_files = ['dataset.csv', 'X_train.csv', 'y_train.csv', 'X_test.csv', 'y_test.csv']
     with zipfile.ZipFile('dataset.zip', 'w') as zipF:
         for file in list_files:
@@ -187,24 +236,22 @@ if uploaded_file or example_data:
                 file_name="dataset.zip",
                 mime="application/octet-stream"
                 )
-    
-    # Display model parameters
+        
     st.header('Model parameters', divider='rainbow')
     parameters_col = st.columns(3)
     parameters_col[0].metric(label="Data split ratio (% for Training Set)", value=parameter_split_size, delta="")
     parameters_col[1].metric(label="Number of estimators (n_estimators)", value=parameter_n_estimators, delta="")
     parameters_col[2].metric(label="Max features (max_features)", value=parameter_max_features_metric, delta="")
-    
-    # Display feature importance plot
+        
     importances = rf.feature_importances_
     feature_names = list(X.columns)
     forest_importances = pd.Series(importances, index=feature_names)
     df_importance = forest_importances.reset_index().rename(columns={'index': 'feature', 0: 'value'})
-    
+        
     bars = alt.Chart(df_importance).mark_bar(size=40).encode(
-             x='value:Q',
-             y=alt.Y('feature:N', sort='-x')
-           ).properties(height=250)
+            x='value:Q',
+            y=alt.Y('feature:N', sort='-x')
+        ).properties(height=250)
 
     performance_col = st.columns((2, 0.2, 3))
     with performance_col[0]:
@@ -214,36 +261,31 @@ if uploaded_file or example_data:
         st.header('Feature importance', divider='rainbow')
         st.altair_chart(bars, theme='streamlit', use_container_width=True)
 
-    # Prediction results
     st.header('Prediction results', divider='rainbow')
     s_y_train = pd.Series(y_train, name='actual').reset_index(drop=True)
     s_y_train_pred = pd.Series(y_train_pred, name='predicted').reset_index(drop=True)
     df_train = pd.DataFrame(data=[s_y_train, s_y_train_pred], index=None).T
     df_train['class'] = 'train'
-        
+            
     s_y_test = pd.Series(y_test, name='actual').reset_index(drop=True)
     s_y_test_pred = pd.Series(y_test_pred, name='predicted').reset_index(drop=True)
     df_test = pd.DataFrame(data=[s_y_test, s_y_test_pred], index=None).T
     df_test['class'] = 'test'
-    
+        
     df_prediction = pd.concat([df_train, df_test], axis=0)
-    
+        
     prediction_col = st.columns((2, 0.2, 3))
-    
-    # Display dataframe
+        
     with prediction_col[0]:
         st.dataframe(df_prediction, height=320, use_container_width=True)
 
-    # Display scatter plot of actual vs predicted values
     with prediction_col[2]:
         scatter = alt.Chart(df_prediction).mark_circle(size=60).encode(
                         x='actual',
                         y='predicted',
-                        color='class'
-                  )
+                           color='class'
+                )
         st.altair_chart(scatter, theme='streamlit', use_container_width=True)
 
-    
-# Ask for CSV upload if none is detected
 else:
     st.warning('👈 Upload a CSV file or click *"Load example data"* to get started!')

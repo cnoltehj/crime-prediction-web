@@ -13,24 +13,23 @@ st.set_page_config(page_title='ML Model Building', page_icon='🤖')
 st.title('🤖 ML Model Building')
 
 with st.expander('About this app'):
-  st.markdown('**What can this app do?**')
-  st.info('This app allow users to build a machine learning (ML) model in an end-to-end workflow. Particularly, this encompasses data upload, data pre-processing, ML model building and post-model analysis.')
+    st.markdown('**What can this app do?**')
+    st.info('This app allows users to build a machine learning (ML) model in an end-to-end workflow. Particularly, this encompasses data upload, data pre-processing, ML model building and post-model analysis.')
 
-  st.markdown('**How to use the app?**')
-  st.warning('To engage with the app, go to the sidebar and 1. Select a data set and 2. Adjust the model parameters by adjusting the various slider widgets. As a result, this would initiate the ML model building process, display the model results as well as allowing users to download the generated models and accompanying data.')
+    st.markdown('**How to use the app?**')
+    st.warning('To engage with the app, go to the sidebar and 1. Select a data set and 2. Adjust the model parameters by adjusting the various slider widgets. This will initiate the ML model building process, display the model results, and allow users to download the generated models and accompanying data.')
 
-  st.markdown('**Under the hood**')
-  st.markdown('Data sets:')
-  st.code('''- Drug solubility data set
-  ''', language='markdown')
+    st.markdown('**Under the hood**')
+    st.markdown('Data sets:')
+    st.code('''- Drug solubility data set
+    ''', language='markdown')
   
-  st.markdown('Libraries used:')
-  st.code('''- Pandas for data wrangling
+    st.markdown('Libraries used:')
+    st.code('''- Pandas for data wrangling
 - Scikit-learn for building a machine learning model
 - Altair for chart creation
 - Streamlit for user interface
-  ''', language='markdown')
-
+    ''', language='markdown')
 
 # Sidebar for accepting input parameters
 with st.sidebar:
@@ -57,7 +56,7 @@ with st.sidebar:
 
     # Select example data
     st.markdown('**1.2. Use example data**')
-    example_data = st.toggle('Load example data')
+    example_data = st.checkbox('Load example data')
     if example_data:
         df = pd.read_csv('https://raw.githubusercontent.com/dataprofessor/data/master/delaney_solubility_with_descriptors.csv')
 
