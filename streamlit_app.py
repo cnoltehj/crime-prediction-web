@@ -15,6 +15,7 @@ st.set_page_config(page_title='ML Model Building', page_icon='🤖', layout='wid
 # Initialize variables
 uploaded_file = None
 example_data = None
+database_data = None
 
 # After setting the page config, you can proceed with the rest of your code
 st.title('🤖 ML Model Building')
@@ -72,7 +73,8 @@ with st.sidebar:
             file_name='delaney_solubility_with_descriptors.csv',
             mime='text/csv',
         )
-    else:
+    elif inputdatatype == 'Use database data':
+        database_data = inputdatatype
         st.markdown('**1. Use database data**')
         with st.expander('Select Input Parameters'):
             province_mapping = {
@@ -104,16 +106,16 @@ with st.sidebar:
             year_mapping = st.slider('Select year range from 2016 - 2023', 2016, 2023)
             quarter = st.radio('Select quarter of year', options=[1, 2, 3, 4], index=0)
 
-        if st.button('Fetch Data'):
-            if not provincecode_value:
-                st.error('Please select a valid province.')
-            elif not policestationcode_value:
-                st.error('Please select a valid police station.')
-        else:
-            db_data = fetch_data(provincecode_value, policestationcode_value, year_mapping, quarter)
+        #if st.button('Fetch Data'):
+        if not provincecode_value:
+            st.error('Please select a valid province.')
+        elif not policestationcode_value:
+            st.error('Please select a valid police station.')
+        #else:
+        df = fetch_data(provincecode_value, policestationcode_value, year_mapping, quarter)
             #print('Fetch data: ',db_data)
-            df = pd.DataFrame(db_data)
-            print('Fetch dataframe: ', df)
+        #df = pd.DataFrame(db_data)
+        print(df)
 
     st.header('2. Set Parameters')
     parameter_split_size = st.slider('Data split ratio (% for Training Set)', 10, 90, 80, 5)
@@ -134,7 +136,7 @@ with st.sidebar:
 
     sleep_time = st.slider('Sleep time', 0, 3, 0)
 
-if uploaded_file or example_data: 
+if uploaded_file or example_data or database_data: 
     with st.status("Running ...", expanded=True) as status:
     
         st.write("Loading data ...")
