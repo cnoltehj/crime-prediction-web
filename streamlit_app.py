@@ -89,17 +89,35 @@ with st.sidebar:
         if replace_outlier:
             df_replace_outliers = replace_outliers(df_db)
 
-    st.header('2. Set Test and Train Parameters')
-    parameter_split_size = st.slider('Data split ratio (% for Training Set)', 10, 90, 80, 5)
+        st.markdown('**1.4. Set Test and Train Parameters**')
+        parameter_split_size = st.slider('Data split ratio (% for Training Set)', 10, 90, 80, 5)
 
-    st.subheader('2.1. Learning Parameters')
-    with st.expander('See parameters'):
-        parameter_n_estimators = st.slider('Number of estimators (n_estimators)', 0, 1000, 100, 100)
-        parameter_max_features = st.select_slider('Max features (max_features)', options=['all', 'sqrt', 'log2'])
-        parameter_min_samples_split = st.slider('Minimum number of samples required to split an internal node (min_samples_split)', 2, 10, 2, 1)
-        parameter_min_samples_leaf = st.slider('Minimum number of samples required to be at a leaf node (min_samples_leaf)', 1, 10, 2, 1)
 
-    st.subheader('2.2. General Parameters')
+    st.subheader('2. Select Algorithm')
+    with st.expander('Algorithms'):
+        algorithm = st.radio('', options=['ANN (MLPRegressor)', 'KNN', 'RFM', 'SVR','XGBoost'], index=4)
+
+    if algorithm == 'ANN (MLPRegressor)':
+        st.markdown('**Learning Parameters**')
+        
+    elif algorithm == 'KNN':
+        st.markdown('**Learning Parameters**')
+
+    elif algorithm == 'RFM':
+        st.markdown('**Learning Parameters**')
+
+    elif algorithm == 'SVR':
+        st.markdown('**Learning Parameters**')
+
+    elif algorithm == 'XGBoost':
+        st.markdown('**Learning Parameters**')
+        with st.expander('See parameters'):
+            parameter_n_estimators = st.slider('Number of estimators (n_estimators)', 0, 1000, 100, 100)
+            parameter_max_features = st.select_slider('Max features (max_features)', options=['all', 'sqrt', 'log2'])
+            parameter_min_samples_split = st.slider('Minimum number of samples required to split an internal node (min_samples_split)', 2, 10, 2, 1)
+            parameter_min_samples_leaf = st.slider('Minimum number of samples required to be at a leaf node (min_samples_leaf)', 1, 10, 2, 1)
+
+    st.subheader('3. General Parameters')
     with st.expander('See parameters', expanded=False):
         parameter_random_state = st.slider('Seed number (random_state)', 0, 1000, 42, 1)
         parameter_criterion = st.select_slider('Performance measure (criterion)', options=['squared_error', 'absolute_error', 'friedman_mse'])
