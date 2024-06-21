@@ -9,15 +9,8 @@ import time
 import zipfile
 from Request.crimecategoriesRequest import fetch_data
 
-# Move the set_page_config() to be the very first Streamlit command
 st.set_page_config(page_title='ML Model Building', page_icon='🤖', layout='wide')
 
-# Initialize variables
-uploaded_file = None
-example_data = None
-database_data = None
-
-# After setting the page config, you can proceed with the rest of your code
 st.title('🤖 ML Model Building')
 
 with st.expander('About this app'):
@@ -39,42 +32,14 @@ with st.expander('About this app'):
 - Streamlit for user interface
     ''', language='markdown')
 
-# Sidebar for accepting input parameters
 with st.sidebar:
     st.header('1.1. Input data')
 
-    # Initialize df
-    df = pd.DataFrame()
+    df_db = pd.DataFrame()
 
-    inputdatatype = st.radio('Select input data type', options=['Use example data', 'Use custom data', 'Use database data'], index=0)
+    inputdatatype = st.radio('Select input data type', options=['Use database data'], index=0)
 
-    if inputdatatype == 'Use example data':
-        st.markdown('**1. Use example data**')
-        example_data = inputdatatype
-        df = pd.read_csv('https://raw.githubusercontent.com/dataprofessor/data/master/delaney_solubility_with_descriptors.csv')
-        #print('Example dataframe: ', df)
-    elif inputdatatype == 'Use custom data':
-        st.markdown('**1. Use custom data**')
-        uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"])
-        if uploaded_file is not None:
-            df = pd.read_csv(uploaded_file, index_col=False)
-        else:
-            st.info('Upload a CSV file to load data.')
-      
-        @st.cache_data  # Use st.cache_data instead of st.cache.resource
-        def convert_df(input_df):
-            return input_df.to_csv(index=False).encode('utf-8')
-        
-        example_csv = pd.read_csv('https://raw.githubusercontent.com/dataprofessor/data/master/delaney_solubility_with_descriptors.csv')
-        csv = convert_df(example_csv)
-        st.download_button(
-            label="Download example CSV",
-            data=csv,
-            file_name='delaney_solubility_with_descriptors.csv',
-            mime='text/csv',
-        )
-    elif inputdatatype == 'Use database data':
-        database_data = inputdatatype
+    if inputdatatype == 'Use database data':
         st.markdown('**1. Use database data**')
         with st.expander('Select Input Parameters'):
             province_mapping = {
@@ -103,19 +68,10 @@ with st.sidebar:
             policestationcode = st.selectbox('Select Police Station', options=list(policestation_mapping.keys()), format_func=lambda x: x, index=0)
             policestationcode_value = policestation_mapping[policestationcode]
 
-            year_mapping = st.slider('Select year range from 2016 - 2023', 2016, 2023)
+            year_mapping = st.slider('Select year range from 2016 - 2023', 2023, 2016)
             quarter = st.radio('Select quarter of year', options=[1, 2, 3, 4], index=0)
 
-        #if st.button('Fetch Data'):
-        if not provincecode_value:
-            st.error('Please select a valid province.')
-        elif not policestationcode_value:
-            st.error('Please select a valid police station.')
-        #else:
-        df = fetch_data(provincecode_value, policestationcode_value, year_mapping, quarter)
-            #print('Fetch data: ',db_data)
-        #df = pd.DataFrame(db_data)
-        print(df)
+            df_db = fetch_data(provincecode_value, policestationcode_value, year_mapping, quarter)
 
     st.header('2. Set Parameters')
     parameter_split_size = st.slider('Data split ratio (% for Training Set)', 10, 90, 80, 5)
@@ -136,7 +92,7 @@ with st.sidebar:
 
     sleep_time = st.slider('Sleep time', 0, 3, 0)
 
-if uploaded_file or example_data or database_data: 
+if not df_db.empty: 
     with st.status("Running ...", expanded=True) as status:
     
         st.write("Loading data ...")
@@ -144,20 +100,27 @@ if uploaded_file or example_data or database_data:
 
         st.write("Preparing data ...")
         time.sleep(sleep_time)
-        X = df.iloc[:,:-1]
-        y = df.iloc[:,-1]
-            
-        st.write("Splitting data ...")
-        time.sleep(sleep_time)
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=(100-parameter_split_size)/100, random_state=parameter_random_state)
-    
-        st.write("Model training ...")
-        time.sleep(sleep_time)
-
-        if parameter_max_features == 'all':
-            parameter_max_features = None
-            parameter_max_features_metric = X.shape[1]
         
+      # Separate features and target
+        X = df_db.drop(columns=['CrimeCategory'])  # Drop the CrimeCategory column
+        # Define y as a numeric target variable, such as the mean across years for each category
+        y = df_db.iloc[:, 1:].mean(axis=1)  # Assuming y should be the mean across all years
+
+        # Now, y will contain numeric values like [-3.128, -8.8, -0.985, -32.121, 23.413, -5.915]
+
+        # Proceed with splitting and model training
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=(100-parameter_split_size)/100, random_state=parameter_random_state)
+
+        # Adjust the computation of max_features
+        if parameter_max_features == 'all':
+            parameter_max_features = None  # Use None for RandomForestRegressor to consider all features
+            parameter_max_features_metric = X.shape[1]  # Number of features
+        elif parameter_max_features == 'sqrt' or parameter_max_features == 'log2':
+            parameter_max_features_metric = parameter_max_features  # Keep track of the metric used
+        else:
+            parameter_max_features_metric = int(parameter_max_features)  # Convert to integer if numeric
+
+        # Model initialization with RandomForestRegressor
         rf = RandomForestRegressor(
             n_estimators=parameter_n_estimators,
             max_features=parameter_max_features,
@@ -168,25 +131,25 @@ if uploaded_file or example_data or database_data:
             bootstrap=parameter_bootstrap,
             oob_score=parameter_oob_score)
         rf.fit(X_train, y_train)
-        
+
         st.write("Applying model to make predictions ...")
         time.sleep(sleep_time)
         y_train_pred = rf.predict(X_train)
         y_test_pred = rf.predict(X_test)
             
-        st.write("Evaluating performance metrics ...")
+        st.write("Calculating performance metrics ...")
         time.sleep(sleep_time)
-        train_mse = mean_squared_error(y_train, y_train_pred)
-        train_r2 = r2_score(y_train, y_train_pred)
-        test_mse = mean_squared_error(y_test, y_test_pred)
-        test_r2 = r2_score(y_test, y_test_pred)
-        
-        st.write("Displaying performance metrics ...")
-        time.sleep(sleep_time)
-        parameter_criterion_string = ' '.join([x.capitalize() for x in parameter_criterion.split('_')])
+        mse_train = mean_squared_error(y_train, y_train_pred)
+        r2_train = r2_score(y_train, y_train_pred)
+        mse_test = mean_squared_error(y_test, y_test_pred)
+        r2_test = r2_score(y_test, y_test_pred)
             
-        rf_results = pd.DataFrame(['Random forest', train_mse, train_r2, test_mse, test_r2]).transpose()
-        rf_results.columns = ['Method', f'Training {parameter_criterion_string}', 'Training R2', f'Test {parameter_criterion_string}', 'Test R2']
+        if parameter_criterion == 'squared_error':
+            parameter_criterion_string = 'MSE'
+        else:
+            parameter_criterion_string = 'MAE'
+                
+        rf_results = pd.DataFrame([mse_train, r2_train, mse_test, r2_test], index=[f'Training {parameter_criterion_string}', 'Training R2', f'Test {parameter_criterion_string}', 'Test R2'])
             
         for col in rf_results.columns:
             rf_results[col] = pd.to_numeric(rf_results[col], errors='ignore')
@@ -202,7 +165,7 @@ if uploaded_file or example_data or database_data:
     col[3].metric(label="No. of Test samples", value=X_test.shape[0], delta="")
         
     with st.expander('Initial dataset', expanded=True):
-            st.dataframe(df, height=210, use_container_width=True)
+            st.dataframe(df_db, height=210, use_container_width=True)
     with st.expander('Train split', expanded=False):
         train_col = st.columns((3,1))
         with train_col[0]:
@@ -220,7 +183,7 @@ if uploaded_file or example_data or database_data:
             st.markdown('**y**')
             st.dataframe(y_test, height=210, hide_index=True, use_container_width=True)
 
-    df.to_csv('dataset.csv', index=False)
+    df_db.to_csv('dataset.csv', index=False)
     X_train.to_csv('X_train.csv', index=False)
     y_train.to_csv('y_train.csv', index=False)
     X_test.to_csv('X_test.csv', index=False)
