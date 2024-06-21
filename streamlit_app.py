@@ -7,11 +7,14 @@ from sklearn.metrics import mean_squared_error, r2_score
 import altair as alt
 import time
 import zipfile
+import matplotlib.pyplot as plt
+import seaborn as sns
 from Request.crimecategoriesRequest import fetch_data
+from Transformation.outliers import identify_outliers ,replace_outliers
 
 st.set_page_config(page_title='ML Model Building', page_icon='🤖', layout='wide')
 
-st.title('🤖 ML Model Building')
+st.title('🤖 Interpretable Regression ML Model Builder')
 
 with st.expander('About this app'):
     st.markdown('**What can this app do?**')
@@ -33,14 +36,16 @@ with st.expander('About this app'):
     ''', language='markdown')
 
 with st.sidebar:
-    st.header('1.1. Input data')
+    st.header('1. Input data')
 
     df_db = pd.DataFrame()
+    df_identify_outliers = pd.DataFrame()
+    df_replace_outliers = pd.DataFrame()
 
     inputdatatype = st.radio('Select input data type', options=['Use database data'], index=0)
 
     if inputdatatype == 'Use database data':
-        st.markdown('**1. Use database data**')
+        st.markdown('**1.1. Use database data**')
         with st.expander('Select Input Parameters'):
             province_mapping = {
                 'Western Cape': 'ZA.WC',
@@ -73,7 +78,18 @@ with st.sidebar:
 
             df_db = fetch_data(provincecode_value, policestationcode_value, year_mapping, quarter)
 
-    st.header('2. Set Parameters')
+        st.markdown('**1.2. Identify outliers**')
+        identify_outlier = st.toggle('Identify outliers')
+        if identify_outlier:
+            df_identify_outliers = identify_outliers(df_db)
+            print(df_identify_outliers)
+
+        st.markdown('**1.3. Replace outliers with median**')
+        replace_outlier = st.toggle('Replace with Median')
+        if replace_outlier:
+            df_replace_outliers = replace_outliers(df_db)
+
+    st.header('2. Set Test and Train Parameters')
     parameter_split_size = st.slider('Data split ratio (% for Training Set)', 10, 90, 80, 5)
 
     st.subheader('2.1. Learning Parameters')
@@ -166,6 +182,27 @@ if not df_db.empty:
         
     with st.expander('Initial dataset', expanded=True):
             st.dataframe(df_db, height=210, use_container_width=True)
+
+    if not df_identify_outliers.empty:
+        with st.expander('Identify outliers', expanded=True):
+            performance_col = st.columns((2, 0.2, 3))
+
+            with performance_col[0]:
+                st.header('Outliers', divider='rainbow')
+                st.dataframe(df_identify_outliers)
+
+            with performance_col[2]:
+                st.header('Box plot of crime percentage', divider='rainbow')
+                plt.figure(figsize=(12, 8))
+                sns.boxplot(x="Year", y="Percentage", data=df_identify_outliers)
+                plt.title("Box Plot of Crime Percentages Over Years")
+                plt.xticks(rotation=45)
+                st.pyplot(plt)
+
+    if not (df_replace_outliers.empty and df_identify_outliers.empty): 
+        with st.expander('Replaced outliers by the median', expanded=True):
+            st.dataframe(df_replace_outliers, height=210, use_container_width=True)
+
     with st.expander('Train split', expanded=False):
         train_col = st.columns((3,1))
         with train_col[0]:
