@@ -25,6 +25,7 @@ def identify_outliers(outliers : pd.DataFrame):
 
             # Define outliers
             outliers = df_melted[(df_melted['Percentage'] < (Q1 - 1.5 * IQR)) | (df_melted['Percentage'] > (Q3 + 1.5 * IQR))]
+            
             return outliers
 
         else:

@@ -10,7 +10,7 @@ import zipfile
 import matplotlib.pyplot as plt
 import seaborn as sns
 from Request.crimecategoriesRequest import fetch_data
-from Transformation.outliers import identify_outliers ,replace_outliers
+from transformation.outliers import identify_outliers ,replace_outliers
 
 st.set_page_config(page_title='ML Model Building', page_icon='🤖', layout='wide')
 
