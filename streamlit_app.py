@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split , GridSearchCV
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, r2_score
 import altair as alt
@@ -9,8 +9,22 @@ import time
 import zipfile
 import matplotlib.pyplot as plt
 import seaborn as sns
-from Request.crimecategoriesRequest import fetch_data
+import shap
+from dataRequest.crimedbRequest import fetch_crime_data,fetch_provinces_data,fetch_policestation_data
 from transformation.outliers import identify_outliers ,replace_outliers
+from algorithmResponse.annResponse import run_ann
+from algorithmResponse.knnResponse import run_knn
+from algorithmResponse.rfmResponse import run_rfm
+from algorithmResponse.svrResponse import run_svr
+from algorithmResponse.xgboostResponse import run_xgboost
+from shapleyPostHocResponse.shapleyPostHoc import display_shap_plots
+from sklearn.metrics import (
+    mean_absolute_error as meanae,
+    mean_squared_error as meanse,
+    r2_score as r2score,
+    mean_absolute_percentage_error as meanape
+)
+
 
 st.set_page_config(page_title='ML Model Building', page_icon='🤖', layout='wide')
 
@@ -38,56 +52,46 @@ with st.expander('About this app'):
 with st.sidebar:
     st.header('1. Input data')
 
-    df_db = pd.DataFrame()
+    df_crime_data_db = pd.DataFrame()
     df_identify_outliers = pd.DataFrame()
     df_replace_outliers = pd.DataFrame()
+    df_provinces = pd.DataFrame()
+    df_policestations = pd.DataFrame()
 
     inputdatatype = st.radio('Select input data type', options=['Use database data'], index=0)
 
     if inputdatatype == 'Use database data':
         st.markdown('**1.1. Use database data**')
         with st.expander('Select Input Parameters'):
-            province_mapping = {
-                'Western Cape': 'ZA.WC',
-                'Eastern Cape': 'ZA.EC',
-                'Free State': 'ZA.FS',
-                'Gauteng': 'ZA.GP',
-                'Mpumalanga': 'ZA.MP',
-                'Northern Cape': 'ZA.NC',
-                'KwaZulu-Natal': 'ZA.NL',
-                'Limpopo': 'ZA.NP',
-                'North-West': 'ZA.NW',
-            }
-            provincecode = st.selectbox('Select Province', options=list(province_mapping.keys()), format_func=lambda x: x, index=0)
-            provincecode_value = province_mapping[provincecode]
+            df_provinces = fetch_provinces_data()
+            province_name = st.selectbox('Select Province', df_provinces['ProvinceName'], format_func=lambda x: x, index=8)
+            province_code_value = df_provinces[df_provinces['ProvinceName'] == province_name]['ProvinceCode'].values[0]
 
-            policestation_mapping = {
-                'Parow': 'PRW104WC',
-                'Athlone': 'AT03WC',
-                'Bellville': 'BV08WC ',
-                'Bishop Lavis': 'BL010WC',
-                'Gugulethu': 'GUG49WC',
-                'Khayelitsha': 'KHL57WC',
-                'Manenberg': 'MBG83WC'
-            }
-            policestationcode = st.selectbox('Select Police Station', options=list(policestation_mapping.keys()), format_func=lambda x: x, index=0)
-            policestationcode_value = policestation_mapping[policestationcode]
+            df_policestations = fetch_policestation_data(province_code_value)
+            # Ensure the index is within the valid range
+            valid_index = min(0, len(df_policestations) - 1)
+            
+            if province_code_value == 'ZA.WC':
+                valid_index = 110
+
+            police_station_name = st.selectbox('Select Police Station', df_policestations['StationName'], format_func=lambda x: x, index=valid_index)
+            police_code_value = df_policestations[df_policestations['StationName'] == police_station_name]['StationCode'].values[0]
 
             year_mapping = st.slider('Select year range from 2016 - 2023', 2023, 2016)
             quarter = st.radio('Select quarter of year', options=[1, 2, 3, 4], index=0)
 
-            df_db = fetch_data(provincecode_value, policestationcode_value, year_mapping, quarter)
+            df_crime_data_db = fetch_crime_data(province_code_value, police_code_value, year_mapping, quarter)
 
         st.markdown('**1.2. Identify outliers**')
         identify_outlier = st.toggle('Identify outliers')
         if identify_outlier:
-            df_identify_outliers = identify_outliers(df_db)
-            print(df_identify_outliers)
+            df_identify_outliers = identify_outliers(df_crime_data_db)
+            print('df_identify_outliers')
 
         st.markdown('**1.3. Replace outliers with median**')
         replace_outlier = st.toggle('Replace with Median')
         if replace_outlier:
-            df_replace_outliers = replace_outliers(df_db)
+            df_replace_outliers = replace_outliers(df_crime_data_db)
 
         st.markdown('**1.4. Set Test and Train Parameters**')
         parameter_split_size = st.slider('Data split ratio (% for Training Set)', 10, 90, 80, 5)
@@ -95,27 +99,7 @@ with st.sidebar:
 
     st.subheader('2. Select Algorithm')
     with st.expander('Algorithms'):
-        algorithm = st.radio('', options=['ANN (MLPRegressor)', 'KNN', 'RFM', 'SVR','XGBoost'], index=4)
-
-    if algorithm == 'ANN (MLPRegressor)':
-        st.markdown('**Learning Parameters**')
-        
-    elif algorithm == 'KNN':
-        st.markdown('**Learning Parameters**')
-
-    elif algorithm == 'RFM':
-        st.markdown('**Learning Parameters**')
-
-    elif algorithm == 'SVR':
-        st.markdown('**Learning Parameters**')
-
-    elif algorithm == 'XGBoost':
-        st.markdown('**Learning Parameters**')
-        with st.expander('See parameters'):
-            parameter_n_estimators = st.slider('Number of estimators (n_estimators)', 0, 1000, 100, 100)
-            parameter_max_features = st.select_slider('Max features (max_features)', options=['all', 'sqrt', 'log2'])
-            parameter_min_samples_split = st.slider('Minimum number of samples required to split an internal node (min_samples_split)', 2, 10, 2, 1)
-            parameter_min_samples_leaf = st.slider('Minimum number of samples required to be at a leaf node (min_samples_leaf)', 1, 10, 2, 1)
+        algorithm = st.radio('', options=['ANN (MLPRegressor)', 'KNN', 'RFM', 'SVR','XGBoost'], index=2)
 
     st.subheader('3. General Parameters')
     with st.expander('See parameters', expanded=False):
@@ -126,7 +110,7 @@ with st.sidebar:
 
     sleep_time = st.slider('Sleep time', 0, 3, 0)
 
-if not df_db.empty: 
+if not df_crime_data_db.empty: 
     with st.status("Running ...", expanded=True) as status:
     
         st.write("Loading data ...")
@@ -136,14 +120,40 @@ if not df_db.empty:
         time.sleep(sleep_time)
         
       # Separate features and target
-        X = df_db.drop(columns=['CrimeCategory'])  # Drop the CrimeCategory column
+        X = df_crime_data_db.drop(columns=['CrimeCategory'])  # Drop the CrimeCategory column
         # Define y as a numeric target variable, such as the mean across years for each category
-        y = df_db.iloc[:, 1:].mean(axis=1)  # Assuming y should be the mean across all years
+        y = df_crime_data_db.iloc[:, 1:].mean(axis=1)  # Assuming y should be the mean across all years
 
         # Now, y will contain numeric values like [-3.128, -8.8, -0.985, -32.121, 23.413, -5.915]
 
         # Proceed with splitting and model training
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=(100-parameter_split_size)/100, random_state=parameter_random_state)
+
+        if algorithm == 'ANN (MLPRegressor)':
+            st.markdown('**Learning Parameters**')
+            #run_ann(parameter_max_features, parameter_split_size, parameter_random_state, X, y)
+        
+        elif algorithm == 'KNN':
+            st.markdown('**Learning Parameters**')
+            #run_knn(parameter_max_features, parameter_split_size, parameter_random_state, X, y)
+
+        elif algorithm == 'RFM':
+            st.markdown('**Learning Parameters**')
+            # with st.expander('See parameters'):
+            parameter_n_estimators = st.slider('Number of estimators (n_estimators)', 0, 1000, 100, 100)
+            parameter_max_features = st.select_slider('Max features (max_features)', options=['all', 'sqrt', 'log2'])
+            parameter_min_samples_split = st.slider('Minimum number of samples required to split an internal node (min_samples_split)', 2, 10, 2, 1)
+            parameter_min_samples_leaf = st.slider('Minimum number of samples required to be at a leaf node (min_samples_leaf)', 1, 10, 2, 1)
+
+            #run_rfm(parameter_max_features, parameter_split_size, parameter_random_state, X, y)
+
+        elif algorithm == 'SVR':
+            st.markdown('**Learning Parameters**')
+            #run_svr(parameter_max_features, parameter_split_size, parameter_random_state, X, y)
+
+        elif algorithm == 'XGBoost':
+            st.markdown('**Learning Parameters**')
+            #run_axgboost(parameter_max_features, parameter_split_size, parameter_random_state, X, y)
 
         # Adjust the computation of max_features
         if parameter_max_features == 'all':
@@ -154,7 +164,17 @@ if not df_db.empty:
         else:
             parameter_max_features_metric = int(parameter_max_features)  # Convert to integer if numeric
 
-        # Model initialization with RandomForestRegressor
+        
+        # Define hyperparameter grid for GridSearchCV
+        param_grid = {
+            'n_estimators': [100, 200, 300],
+            'max_features': ['auto', 'sqrt', 'log2'],
+            'min_samples_split': [2, 5, 10],
+            'min_samples_leaf': [1, 2, 4],
+            'max_depth': [None, 10, 20, 30]
+        }
+
+        # # Model initialization with RandomForestRegressor
         rf = RandomForestRegressor(
             n_estimators=parameter_n_estimators,
             max_features=parameter_max_features,
@@ -164,7 +184,37 @@ if not df_db.empty:
             criterion=parameter_criterion,
             bootstrap=parameter_bootstrap,
             oob_score=parameter_oob_score)
+
+        # Initialize the MLP Regressor
+        #rf = RandomForestRegressor(random_state=42)
+        
+        # Fit the initial model
         rf.fit(X_train, y_train)
+
+        # rf = RandomForestRegressor(random_state=42, max_features=parameter_max_features)
+        # rf.fit(X_train, y_train)
+
+        
+            # n_estimators=parameter_n_estimators,
+            # max_features=parameter_max_features,
+            # min_samples_split=parameter_min_samples_split,
+            # min_samples_leaf=parameter_min_samples_leaf,
+            # random_state=parameter_random_state
+
+        
+        # criterion=parameter_criterion
+        # bootstrap=parameter_bootstrap
+        # oob_score=parameter_oob_score
+
+        # # Perform GridSearchCV for hyperparameter tuning
+        # grid_search = GridSearchCV(estimator=rf, param_grid=param_grid, scoring='neg_mean_squared_error', cv=3)
+        # grid_search.fit(X_train, y_train)
+
+        # # Get the best model from GridSearchCV
+        # best_mlp_model = grid_search.best_estimator_
+
+        # # Make predictions on the test data
+        # y_pred = best_mlp_model.predict(X_test)
 
         st.write("Applying model to make predictions ...")
         time.sleep(sleep_time)
@@ -173,17 +223,35 @@ if not df_db.empty:
             
         st.write("Calculating performance metrics ...")
         time.sleep(sleep_time)
-        mse_train = mean_squared_error(y_train, y_train_pred)
-        r2_train = r2_score(y_train, y_train_pred)
-        mse_test = mean_squared_error(y_test, y_test_pred)
-        r2_test = r2_score(y_test, y_test_pred)
+
+         # Calculate various metrics
+        mae_train = meanae(y_train, y_train_pred)
+        mse_train = meanse(y_train, y_train_pred)
+        r2_train = r2score(y_train, y_train_pred)
+        mape_train = meanape(y_train, y_train_pred)
+
+        # mae_test = meanae(y_test, y_pred)
+        # mse_test = meanse(y_test, y_pred)
+        # r2_test = r2score(y_test, y_pred)
+        # mape_test = meanape(y_test, y_pred)
+
+        mae_test = meanae(y_test, y_test_pred)
+        mse_test = meanse(y_test, y_test_pred)
+        r2_test = r2score(y_test, y_test_pred)
+        mape_test = meanape(y_test, y_test_pred)
+
+        # mse_train = mean_squared_error(y_train, y_train_pred)
+        # r2_train = r2_score(y_train, y_train_pred)
+        # mse_test = mean_squared_error(y_test, y_test_pred)
+        # r2_test = r2_score(y_test, y_test_pred)
             
         if parameter_criterion == 'squared_error':
             parameter_criterion_string = 'MSE'
         else:
             parameter_criterion_string = 'MAE'
-                
-        rf_results = pd.DataFrame([mse_train, r2_train, mse_test, r2_test], index=[f'Training {parameter_criterion_string}', 'Training R2', f'Test {parameter_criterion_string}', 'Test R2'])
+
+        rf_results = pd.DataFrame([mse_train, r2_train, mae_train, mape_train, mse_test, r2_test, mae_test, mape_test ], index=[f'Training {parameter_criterion_string}', 'Training R2', 'Training mae', 'Training MAPE', f'Test {parameter_criterion_string}', 'Test R2','Test mae', 'Test MAPE'])        
+        #rf_results = pd.DataFrame([mse_train, r2_train, mse_test, r2_test], index=[f'Training {parameter_criterion_string}', 'Training R2', f'Test {parameter_criterion_string}', 'Test R2'])
             
         for col in rf_results.columns:
             rf_results[col] = pd.to_numeric(rf_results[col], errors='ignore')
@@ -199,7 +267,7 @@ if not df_db.empty:
     col[3].metric(label="No. of Test samples", value=X_test.shape[0], delta="")
         
     with st.expander('Initial dataset', expanded=True):
-            st.dataframe(df_db, height=210, use_container_width=True)
+            st.dataframe(df_crime_data_db, height=210, use_container_width=True)
 
     if not df_identify_outliers.empty:
         with st.expander('Identify outliers', expanded=True):
@@ -238,7 +306,7 @@ if not df_db.empty:
             st.markdown('**y**')
             st.dataframe(y_test, height=210, hide_index=True, use_container_width=True)
 
-    df_db.to_csv('dataset.csv', index=False)
+    df_crime_data_db.to_csv('dataset.csv', index=False)
     X_train.to_csv('X_train.csv', index=False)
     y_train.to_csv('y_train.csv', index=False)
     X_test.to_csv('X_test.csv', index=False)
@@ -306,6 +374,33 @@ if not df_db.empty:
                            color='class'
                 )
         st.altair_chart(scatter, theme='streamlit', use_container_width=True)
+
+    st.header('Shapley values', divider='rainbow')
+    with st.expander('Shapley values'):
+        print('empty space')
+    #     # Function to preprocess the data and get the XGBoost model prediction
+    # # def model_predict(X):
+    # #     return  best_mlp_model.predict(X) 
+ 
+       
+    # Predict
+    model_predict = rf.predict(X_test)
+
+    # Explainer using Kernel SHAP and the background dataset
+    explainer = shap.KernelExplainer(rf.predict, X_train)
+
+    # Run initjs()
+    shap.initjs()
+
+    # Summary plot for each feature's impact on the output
+    shap_values = explainer.shap_values(X_test)
+    shap.summary_plot(shap_values, X_test, feature_names=X_test.columns)
+
+    # Individual SHAP value plot for a specific instance
+    instance_index = 0  # You can choose any instance index
+    shap.force_plot(explainer.expected_value, shap_values[instance_index, :], X_test.iloc[instance_index, :])
+
+    display_shap_plots(rf, X_train, X)
 
 else:
     st.warning('👈 Upload a CSV file or click *"Load example data"* to get started!')
