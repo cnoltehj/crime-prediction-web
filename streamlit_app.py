@@ -120,14 +120,32 @@ if not df_crime_data_db.empty:
         time.sleep(sleep_time)
         
       # Separate features and target
-        X = df_crime_data_db.drop(columns=['CrimeCategory'])  # Drop the CrimeCategory column
+        X = df_crime_data_db .drop(columns=['CrimeCategory'])  # Drop the CrimeCategory column
+        crime_category = df_crime_data_db['CrimeCategory']   # Keep the CrimeCategory column separately
+
         # Define y as a numeric target variable, such as the mean across years for each category
         y = df_crime_data_db.iloc[:, 1:].mean(axis=1)  # Assuming y should be the mean across all years
 
         # Now, y will contain numeric values like [-3.128, -8.8, -0.985, -32.121, 23.413, -5.915]
 
         # Proceed with splitting and model training
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=(100-parameter_split_size)/100, random_state=parameter_random_state)
+        #X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=(100-parameter_split_size)/100, random_state=parameter_random_state)
+       # Proceed with splitting and model training
+        X_train, X_test, y_train, y_test, crime_category_train, crime_category_test = train_test_split(
+        X, y, crime_category, test_size=(100-parameter_split_size)/100, random_state=parameter_random_state)
+
+       # Reset indices to ensure proper alignment
+        crime_category_train = crime_category_train.reset_index(drop=True)
+        crime_category_test = crime_category_test.reset_index(drop=True)
+        X_train = X_train.reset_index(drop=True)
+        X_test = X_test.reset_index(drop=True)
+
+        # Insert CrimeCategory as the first column
+        X_train_display = X_train.copy()
+        X_train_display.insert(0, 'CrimeCategory', crime_category_train)  # Insert as the first column
+        X_test_display = X_test.copy()
+        X_test_display.insert(0, 'CrimeCategory', crime_category_test)  # Insert as the first column
+
 
         if algorithm == 'ANN (MLPRegressor)':
             st.markdown('**Learning Parameters**')
@@ -289,19 +307,21 @@ if not df_crime_data_db.empty:
         with st.expander('Replaced outliers by the median', expanded=True):
             st.dataframe(df_replace_outliers, height=210, use_container_width=True)
 
+   # Display the updated train and test splits
     with st.expander('Train split', expanded=False):
-        train_col = st.columns((3,1))
+        train_col = st.columns((3, 1))
         with train_col[0]:
             st.markdown('**X**')
-            st.dataframe(X_train, height=210, hide_index=True, use_container_width=True)
+            st.dataframe(X_train_display, height=210, hide_index=True, use_container_width=True)
         with train_col[1]:
             st.markdown('**y**')
             st.dataframe(y_train, height=210, hide_index=True, use_container_width=True)
+
     with st.expander('Test split', expanded=False):
-        test_col = st.columns((3,1))
+        test_col = st.columns((3, 1))
         with test_col[0]:
             st.markdown('**X**')
-            st.dataframe(X_test, height=210, hide_index=True, use_container_width=True)
+            st.dataframe(X_test_display, height=210, hide_index=True, use_container_width=True)
         with test_col[1]:
             st.markdown('**y**')
             st.dataframe(y_test, height=210, hide_index=True, use_container_width=True)
