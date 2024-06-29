@@ -1,27 +1,50 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split , GridSearchCV
+from sklearn.model_selection import (
+    train_test_split , 
+    GridSearchCV
+    )
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.neural_network import MLPRegressor
+from sklearn.svm import SVR
+from xgboost import XGBRegressor
 import altair as alt
 import time
 import zipfile
 import matplotlib.pyplot as plt
 import seaborn as sns
 import shap
-from dataRequest.crimedbRequest import fetch_crime_data,fetch_provinces_data,fetch_policestation_data
-from modelResponse.modeltrainingResponse import train_rfm_model
-from modelResponse.outliersResponse import identify_outliers , replace_outliers
+from dataRequest.crimedbRequest import (
+    fetch_crime_data, 
+    fetch_provinces_data, 
+    fetch_policestation_data
+    )
+from modelResponse.modeltrainingResponse import (
+    train_rfm_model, 
+    train_ann_model,  
+    train_knn_model, 
+    train_svr_model, 
+    train_xgb_model
+    )
+from modelResponse.outliersResponse import (
+    identify_outliers, 
+    replace_outliers
+    )
 from modelResponse.hyperparametersResponse import mse_gridSearchCV
 from shapleyPostHocResponse.shapleyPostHocResopnse import display_shap_plots
-from sklearn.metrics import (
-    mean_absolute_error as meanae,
+from sklearn.metrics import ( 
+    mean_absolute_error as meanae, 
     mean_squared_error as meanse,
-    r2_score as r2score,
+    r2_score as r2score, 
     mean_absolute_percentage_error as meanape
 )
 
+mae_values = []
+mse_values = []
+r2_values = []
+mape_values = []
 
 st.set_page_config(page_title='ML Model Building', page_icon='🤖', layout='wide')
 
@@ -41,9 +64,9 @@ with st.expander('About this app'):
   
     st.markdown('Libraries used:')
     st.code('''- Pandas for data wrangling
-- Scikit-learn for building a machine learning model
-- Altair for chart creation
-- Streamlit for user interface
+               - Scikit-learn for building a machine learning model
+               - Altair for chart creation
+            - Streamlit for user interface
     ''', language='markdown')
 
 with st.sidebar:
@@ -99,28 +122,14 @@ with st.sidebar:
     with st.expander('Algorithms'):
         algorithm = st.radio('', options=['ANN (MLPRegressor)', 'KNN', 'RFM', 'SVR','XGBoost'], index=2)
 
-    if algorithm == 'ANN (MLPRegressor)':
-        st.markdown('**Learning Parameters**')
-        
-    elif algorithm == 'KNN':
-        st.markdown('**Learning Parameters**')
-            #run_knn(parameter_max_features, parameter_split_size, parameter_random_state, X, y)
+    st.subheader('3. Learning Parameters')
+    with st.expander('See parameters', expanded=False):
+            parameter_n_estimators = st.slider('Number of estimators (n_estimators)', 0, 1000, 100, 100)
+            parameter_max_features = st.select_slider('Max features (max_features)', options=['sqrt', 'log2', 'all']) #['all', 'sqrt', 'log2']
+            parameter_min_samples_split = st.slider('Minimum number of samples required to split an internal node (min_samples_split)', 2, 10, 2, 1)
+            parameter_min_samples_leaf = st.slider('Minimum number of samples required to be at a leaf node (min_samples_leaf)', 1, 10, 2, 1)
 
-    elif algorithm == 'RFM':
-        st.markdown('**Learning Parameters**')
-            # with st.expander('See parameters'):
-        parameter_n_estimators = st.slider('Number of estimators (n_estimators)', 0, 1000, 100, 100)
-        parameter_max_features = st.select_slider('Max features (max_features)', options=['sqrt', 'log2', 'all']) #['all', 'sqrt', 'log2']
-        parameter_min_samples_split = st.slider('Minimum number of samples required to split an internal node (min_samples_split)', 2, 10, 2, 1)
-        parameter_min_samples_leaf = st.slider('Minimum number of samples required to be at a leaf node (min_samples_leaf)', 1, 10, 2, 1)
-
-    elif algorithm == 'SVR':
-        st.markdown('**Learning Parameters**')
-
-    elif algorithm == 'XGBoost':
-        st.markdown('**Learning Parameters**')
-
-    st.subheader('3. General Parameters')
+    st.subheader('4. General Parameters')
     with st.expander('See parameters', expanded=False):
         parameter_random_state = st.slider('Seed number (random_state)', 0, 1000, 42, 1)
         parameter_criterion = st.select_slider('Performance measure (criterion)', options=['squared_error', 'absolute_error', 'friedman_mse'])
@@ -145,11 +154,6 @@ if not df_crime_data_db.empty:
         # Define y as a numeric target variable, such as the mean across years for each category
         y = df_crime_data_db.iloc[:, 1:].mean(axis=1)  # Assuming y should be the mean across all years
 
-        # Now, y will contain numeric values like [-3.128, -8.8, -0.985, -32.121, 23.413, -5.915]
-
-        # Proceed with splitting and model training
-        #X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=(100-parameter_split_size)/100, random_state=parameter_random_state)
-       # Proceed with splitting and model training
         X_train, X_test, y_train, y_test, crime_category_train, crime_category_test = train_test_split(
         X, y, crime_category, test_size=(100-parameter_split_size)/100, random_state=parameter_random_state)
 
@@ -165,33 +169,27 @@ if not df_crime_data_db.empty:
         X_test_display = X_test.copy()
         X_test_display.insert(0, 'CrimeCategory', crime_category_test)  # Insert as the first column
 
+        feature_importances_ = ''
 
         if algorithm == 'ANN (MLPRegressor)':
-            value = ''
+            model = MLPRegressor()
+            model = train_ann_model(parameter_n_estimators, parameter_max_features, parameter_min_samples_split, parameter_min_samples_leaf, parameter_random_state, parameter_criterion, parameter_bootstrap, parameter_oob_score)
         
         elif algorithm == 'KNN':
-            st.markdown('**Learning Parameters**')
-            #run_knn(parameter_max_features, parameter_split_size, parameter_random_state, X, y)
+            model = KNeighborsRegressor()
+            model = train_knn_model(parameter_n_estimators, parameter_max_features, parameter_min_samples_split, parameter_min_samples_leaf, parameter_random_state, parameter_criterion, parameter_bootstrap, parameter_oob_score)
 
         elif algorithm == 'RFM':
+            model = RandomForestRegressor()
             model = train_rfm_model(parameter_n_estimators, parameter_max_features, parameter_min_samples_split, parameter_min_samples_leaf, parameter_random_state, parameter_criterion, parameter_bootstrap, parameter_oob_score)
-          
-             # # Model initialization with RandomForestRegressor
-            # rf = RandomForestRegressor(
-            #     n_estimators=parameter_n_estimators,
-            #     max_features=parameter_max_features,
-            #     min_samples_split=parameter_min_samples_split,
-            #     min_samples_leaf=parameter_min_samples_leaf,
-            #     random_state=parameter_random_state,
-            #     criterion=parameter_criterion,
-            #     bootstrap=parameter_bootstrap,
-            #     oob_score=parameter_oob_score)
-
+           
         elif algorithm == 'SVR':
-            value = ''
+            model = SVR()
+            model = train_svr_model(parameter_n_estimators, parameter_max_features, parameter_min_samples_split, parameter_min_samples_leaf, parameter_random_state, parameter_criterion, parameter_bootstrap, parameter_oob_score)
 
         elif algorithm == 'XGBoost':
-            value = ''
+            model = XGBRegressor()
+            model = train_xgb_model(parameter_n_estimators, parameter_max_features, parameter_min_samples_split, parameter_min_samples_leaf, parameter_random_state, parameter_criterion, parameter_bootstrap, parameter_oob_score)
 
         # Adjust the computation of max_features
         if parameter_max_features == 'all':
@@ -205,13 +203,13 @@ if not df_crime_data_db.empty:
         model.fit(X_train, y_train)
 
         # Define hyperparameter grid for GridSearchCV
-        param_grid = {
-            'n_estimators': [100, 200, 300],
-            'max_features': ['auto', 'sqrt', 'log2'],
-            'min_samples_split': [2, 5, 10],
-            'min_samples_leaf': [1, 2, 4],
-            'max_depth': [None, 10, 20, 30]
-        }
+        # param_grid = {
+        #     'n_estimators': [100, 200, 300],
+        #     'max_features': ['auto', 'sqrt', 'log2'],
+        #     'min_samples_split': [2, 5, 10],
+        #     'min_samples_leaf': [1, 2, 4],
+        #     'max_depth': [None, 10, 20, 30]
+        # }
         
         # Fit the initial model
         model.fit(X_train, y_train)
@@ -240,12 +238,11 @@ if not df_crime_data_db.empty:
         else:
             parameter_criterion_string = 'MAE'
 
-        rf_results = pd.DataFrame([mse_train, r2_train, mae_train, mape_train, mse_test, r2_test, mae_test, mape_test ], index=[f'Training {parameter_criterion_string}', 'Training R2', 'Training mae', 'Training MAPE', f'Test {parameter_criterion_string}', 'Test R2','Test mae', 'Test MAPE'])        
-        #rf_results = pd.DataFrame([mse_train, r2_train, mse_test, r2_test], index=[f'Training {parameter_criterion_string}', 'Training R2', f'Test {parameter_criterion_string}', 'Test R2'])
-            
-        for col in rf_results.columns:
-            rf_results[col] = pd.to_numeric(rf_results[col], errors='ignore')
-        rf_results = rf_results.round(3)
+        model_results = pd.DataFrame([mse_train, r2_train, mae_train, mape_train, mse_test, r2_test, mae_test, mape_test ], index=[f'Training {parameter_criterion_string}', 'Training R2', 'Training mae', 'Training MAPE', f'Test {parameter_criterion_string}', 'Test R2','Test mae', 'Test MAPE'])        
+                  
+        for col in model_results.columns:
+            model_results[col] = pd.to_numeric(model_results[col], errors='ignore')
+        model_results = model_results.round(3)
         
     status.update(label="Status", state="complete", expanded=False)
 
@@ -376,7 +373,7 @@ if not df_crime_data_db.empty:
     performance_col = st.columns((2, 0.2, 3))
     with performance_col[0]:
         st.header('Model performance', divider='rainbow')
-        st.dataframe(rf_results.T.reset_index().rename(columns={'index': 'Parameter', 0: 'Value'}))
+        st.dataframe(model_results.T.reset_index().rename(columns={'index': 'Parameter', 0: 'Value'}))
     with performance_col[2]:
         st.header('Feature importance', divider='rainbow')
         st.altair_chart(bars, theme='streamlit', use_container_width=True)
