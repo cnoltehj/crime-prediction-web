@@ -18,7 +18,8 @@ def train_knn_model(parameter_n_estimators,parameter_max_features,parameter_min_
         # Fit the initial model
         # model.fit(X_train, y_train)
 
-def train_rfm_model(parameter_n_estimators, parameter_max_features, parameter_min_samples_split, parameter_min_samples_leaf, parameter_random_state, parameter_criterion, parameter_bootstrap, parameter_oob_score, X_train, y_train):
+def train_rfm_model(parameter_n_estimators, parameter_max_features, parameter_min_samples_split, parameter_min_samples_leaf, parameter_random_state, parameter_criterion, parameter_bootstrap, parameter_oob_score):
+    
     model = RandomForestRegressor(
         n_estimators=parameter_n_estimators,
         max_features=parameter_max_features,
@@ -30,8 +31,6 @@ def train_rfm_model(parameter_n_estimators, parameter_max_features, parameter_mi
         oob_score=parameter_oob_score
     )
 
-    # Fit the initial model
-    model.fit(X_train, y_train)
     return model
 
 def train_svr_model(parameter_n_estimators,parameter_max_features,parameter_min_samples_split,parameter_min_samples_leaf,parameter_random_state,parameter_criterion,parameter_bootstrap,parameter_oob_score):

@@ -11,13 +11,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import shap
 from dataRequest.crimedbRequest import fetch_crime_data,fetch_provinces_data,fetch_policestation_data
-from transformation.outliers import identify_outliers ,replace_outliers
-from algorithmResponse.annResponse import run_ann
-from algorithmResponse.knnResponse import run_knn
-from algorithmResponse.rfmResponse import run_rfm
-from algorithmResponse.svrResponse import run_svr
-from algorithmResponse.xgboostResponse import run_xgboost
-from shapleyPostHocResponse.shapleyPostHoc import display_shap_plots
+from modelResponse.modeltrainingResponse import train_rfm_model
+from modelResponse.outliersResponse import identify_outliers , replace_outliers
+from modelResponse.hyperparametersResponse import mse_gridSearchCV
+from shapleyPostHocResponse.shapleyPostHocResopnse import display_shap_plots
 from sklearn.metrics import (
     mean_absolute_error as meanae,
     mean_squared_error as meanse,
@@ -84,12 +81,13 @@ with st.sidebar:
 
         st.markdown('**1.2. Identify outliers**')
         identify_outlier = st.toggle('Identify outliers')
+        
         if identify_outlier:
             df_identify_outliers = identify_outliers(df_crime_data_db)
-            print('df_identify_outliers')
 
         st.markdown('**1.3. Replace outliers with median**')
         replace_outlier = st.toggle('Replace with Median')
+
         if replace_outlier:
             df_replace_outliers = replace_outliers(df_crime_data_db)
 
@@ -100,6 +98,27 @@ with st.sidebar:
     st.subheader('2. Select Algorithm')
     with st.expander('Algorithms'):
         algorithm = st.radio('', options=['ANN (MLPRegressor)', 'KNN', 'RFM', 'SVR','XGBoost'], index=2)
+
+    if algorithm == 'ANN (MLPRegressor)':
+        st.markdown('**Learning Parameters**')
+        
+    elif algorithm == 'KNN':
+        st.markdown('**Learning Parameters**')
+            #run_knn(parameter_max_features, parameter_split_size, parameter_random_state, X, y)
+
+    elif algorithm == 'RFM':
+        st.markdown('**Learning Parameters**')
+            # with st.expander('See parameters'):
+        parameter_n_estimators = st.slider('Number of estimators (n_estimators)', 0, 1000, 100, 100)
+        parameter_max_features = st.select_slider('Max features (max_features)', options=['sqrt', 'log2', 'all']) #['all', 'sqrt', 'log2']
+        parameter_min_samples_split = st.slider('Minimum number of samples required to split an internal node (min_samples_split)', 2, 10, 2, 1)
+        parameter_min_samples_leaf = st.slider('Minimum number of samples required to be at a leaf node (min_samples_leaf)', 1, 10, 2, 1)
+
+    elif algorithm == 'SVR':
+        st.markdown('**Learning Parameters**')
+
+    elif algorithm == 'XGBoost':
+        st.markdown('**Learning Parameters**')
 
     st.subheader('3. General Parameters')
     with st.expander('See parameters', expanded=False):
@@ -148,30 +167,31 @@ if not df_crime_data_db.empty:
 
 
         if algorithm == 'ANN (MLPRegressor)':
-            st.markdown('**Learning Parameters**')
-            #run_ann(parameter_max_features, parameter_split_size, parameter_random_state, X, y)
+            value = ''
         
         elif algorithm == 'KNN':
             st.markdown('**Learning Parameters**')
             #run_knn(parameter_max_features, parameter_split_size, parameter_random_state, X, y)
 
         elif algorithm == 'RFM':
-            st.markdown('**Learning Parameters**')
-            # with st.expander('See parameters'):
-            parameter_n_estimators = st.slider('Number of estimators (n_estimators)', 0, 1000, 100, 100)
-            parameter_max_features = st.select_slider('Max features (max_features)', options=['all', 'sqrt', 'log2'])
-            parameter_min_samples_split = st.slider('Minimum number of samples required to split an internal node (min_samples_split)', 2, 10, 2, 1)
-            parameter_min_samples_leaf = st.slider('Minimum number of samples required to be at a leaf node (min_samples_leaf)', 1, 10, 2, 1)
-
-            #run_rfm(parameter_max_features, parameter_split_size, parameter_random_state, X, y)
+            model = train_rfm_model(parameter_n_estimators, parameter_max_features, parameter_min_samples_split, parameter_min_samples_leaf, parameter_random_state, parameter_criterion, parameter_bootstrap, parameter_oob_score)
+          
+             # # Model initialization with RandomForestRegressor
+            # rf = RandomForestRegressor(
+            #     n_estimators=parameter_n_estimators,
+            #     max_features=parameter_max_features,
+            #     min_samples_split=parameter_min_samples_split,
+            #     min_samples_leaf=parameter_min_samples_leaf,
+            #     random_state=parameter_random_state,
+            #     criterion=parameter_criterion,
+            #     bootstrap=parameter_bootstrap,
+            #     oob_score=parameter_oob_score)
 
         elif algorithm == 'SVR':
-            st.markdown('**Learning Parameters**')
-            #run_svr(parameter_max_features, parameter_split_size, parameter_random_state, X, y)
+            value = ''
 
         elif algorithm == 'XGBoost':
-            st.markdown('**Learning Parameters**')
-            #run_axgboost(parameter_max_features, parameter_split_size, parameter_random_state, X, y)
+            value = ''
 
         # Adjust the computation of max_features
         if parameter_max_features == 'all':
@@ -182,7 +202,8 @@ if not df_crime_data_db.empty:
         else:
             parameter_max_features_metric = int(parameter_max_features)  # Convert to integer if numeric
 
-        
+        model.fit(X_train, y_train)
+
         # Define hyperparameter grid for GridSearchCV
         param_grid = {
             'n_estimators': [100, 200, 300],
@@ -191,53 +212,14 @@ if not df_crime_data_db.empty:
             'min_samples_leaf': [1, 2, 4],
             'max_depth': [None, 10, 20, 30]
         }
-
-        # # Model initialization with RandomForestRegressor
-        rf = RandomForestRegressor(
-            n_estimators=parameter_n_estimators,
-            max_features=parameter_max_features,
-            min_samples_split=parameter_min_samples_split,
-            min_samples_leaf=parameter_min_samples_leaf,
-            random_state=parameter_random_state,
-            criterion=parameter_criterion,
-            bootstrap=parameter_bootstrap,
-            oob_score=parameter_oob_score)
-
-        # Initialize the MLP Regressor
-        #rf = RandomForestRegressor(random_state=42)
         
         # Fit the initial model
-        rf.fit(X_train, y_train)
-
-        # rf = RandomForestRegressor(random_state=42, max_features=parameter_max_features)
-        # rf.fit(X_train, y_train)
-
-        
-            # n_estimators=parameter_n_estimators,
-            # max_features=parameter_max_features,
-            # min_samples_split=parameter_min_samples_split,
-            # min_samples_leaf=parameter_min_samples_leaf,
-            # random_state=parameter_random_state
-
-        
-        # criterion=parameter_criterion
-        # bootstrap=parameter_bootstrap
-        # oob_score=parameter_oob_score
-
-        # # Perform GridSearchCV for hyperparameter tuning
-        # grid_search = GridSearchCV(estimator=rf, param_grid=param_grid, scoring='neg_mean_squared_error', cv=3)
-        # grid_search.fit(X_train, y_train)
-
-        # # Get the best model from GridSearchCV
-        # best_mlp_model = grid_search.best_estimator_
-
-        # # Make predictions on the test data
-        # y_pred = best_mlp_model.predict(X_test)
+        model.fit(X_train, y_train)
 
         st.write("Applying model to make predictions ...")
         time.sleep(sleep_time)
-        y_train_pred = rf.predict(X_train)
-        y_test_pred = rf.predict(X_test)
+        y_train_pred = model.predict(X_train)
+        y_test_pred = model.predict(X_test)
             
         st.write("Calculating performance metrics ...")
         time.sleep(sleep_time)
@@ -248,20 +230,10 @@ if not df_crime_data_db.empty:
         r2_train = r2score(y_train, y_train_pred)
         mape_train = meanape(y_train, y_train_pred)
 
-        # mae_test = meanae(y_test, y_pred)
-        # mse_test = meanse(y_test, y_pred)
-        # r2_test = r2score(y_test, y_pred)
-        # mape_test = meanape(y_test, y_pred)
-
         mae_test = meanae(y_test, y_test_pred)
         mse_test = meanse(y_test, y_test_pred)
         r2_test = r2score(y_test, y_test_pred)
         mape_test = meanape(y_test, y_test_pred)
-
-        # mse_train = mean_squared_error(y_train, y_train_pred)
-        # r2_train = r2_score(y_train, y_train_pred)
-        # mse_test = mean_squared_error(y_test, y_test_pred)
-        # r2_test = r2_score(y_test, y_test_pred)
             
         if parameter_criterion == 'squared_error':
             parameter_criterion_string = 'MSE'
@@ -278,14 +250,34 @@ if not df_crime_data_db.empty:
     status.update(label="Status", state="complete", expanded=False)
 
     st.header('Input data', divider='rainbow')
-    col = st.columns(4)
+    train_ratio = parameter_split_size
+    test_ratio = 100 - parameter_split_size
+    split_ration_value = f'{train_ratio} : {test_ratio}'
+    split_ration = f'Split Ration % Train\:Test'
+    col = st.columns(5)
     col[0].metric(label="No. of samples", value=X.shape[0], delta="")
     col[1].metric(label="No. of X variables", value=X.shape[1], delta="")
     col[2].metric(label="No. of Training samples", value=X_train.shape[0], delta="")
     col[3].metric(label="No. of Test samples", value=X_test.shape[0], delta="")
+    col[4].metric(label= split_ration, value= split_ration_value, delta="")
         
     with st.expander('Initial dataset', expanded=True):
             st.dataframe(df_crime_data_db, height=210, use_container_width=True)
+
+             # Prepare data for the graph
+            df_outliers_melt = df_crime_data_db.melt(id_vars=['CrimeCategory'], var_name='Year', value_name='Percentage')
+
+            # Create the graph using seaborn
+            plt.figure(figsize=(10, 6))
+            sns.lineplot(data=df_outliers_melt, x='Year', y='Percentage', hue='CrimeCategory', marker='o')
+            plt.title('Crime Trends Over the Years')
+            plt.xlabel('Year')
+            plt.ylabel('Percentage')
+            plt.legend(title='Crime Category', bbox_to_anchor=(1.05, 1), loc='upper left')
+            plt.xticks(rotation=45)
+
+            # Display the graph in Streamlit
+            st.pyplot(plt)
 
     if not df_identify_outliers.empty:
         with st.expander('Identify outliers', expanded=True):
@@ -295,17 +287,36 @@ if not df_crime_data_db.empty:
                 st.header('Outliers', divider='rainbow')
                 st.dataframe(df_identify_outliers)
 
+            # Plot box plot of the data with outliers replaced   
             with performance_col[2]:
-                st.header('Box plot of crime percentage', divider='rainbow')
+                st.header('Outliers box plot of crime percentage', divider='rainbow')
                 plt.figure(figsize=(12, 8))
                 sns.boxplot(x="Year", y="Percentage", data=df_identify_outliers)
-                plt.title("Box Plot of Crime Percentages Over Years")
+                plt.title("Box plot identifying the outliers")
                 plt.xticks(rotation=45)
                 st.pyplot(plt)
 
+    
+    #df_replace_outliers
     if not (df_replace_outliers.empty and df_identify_outliers.empty): 
         with st.expander('Replaced outliers by the median', expanded=True):
             st.dataframe(df_replace_outliers, height=210, use_container_width=True)
+            
+            if not (df_replace_outliers.empty):
+                graph = ''
+                df_outliers_replaced_melt = df_replace_outliers.melt(id_vars=['CrimeCategory'], var_name='Year', value_name='Percentage')
+
+                # Create the graph using seaborn
+                plt.figure(figsize=(10, 6))
+                sns.lineplot(data=df_outliers_replaced_melt, x='Year', y='Percentage', hue='CrimeCategory', marker='o')
+                plt.title('Crime Trends Over the Years with Outliers Replaced ')
+                plt.xlabel('Year')
+                plt.ylabel('Percentage')
+                plt.legend(title='Crime Category', bbox_to_anchor=(1.05, 1), loc='upper left')
+                plt.xticks(rotation=45)
+
+                # Display the graph in Streamlit
+                st.pyplot(plt)
 
    # Display the updated train and test splits
     with st.expander('Train split', expanded=False):
@@ -351,7 +362,7 @@ if not df_crime_data_db.empty:
     parameters_col[1].metric(label="Number of estimators (n_estimators)", value=parameter_n_estimators, delta="")
     parameters_col[2].metric(label="Max features (max_features)", value=parameter_max_features_metric, delta="")
         
-    importances = rf.feature_importances_
+    importances = model.feature_importances_
     feature_names = list(X.columns)
     forest_importances = pd.Series(importances, index=feature_names)
     df_importance = forest_importances.reset_index().rename(columns={'index': 'feature', 0: 'value'})
@@ -404,23 +415,23 @@ if not df_crime_data_db.empty:
  
        
     # Predict
-    model_predict = rf.predict(X_test)
+    model_predict = model.predict(X_test)
 
     # Explainer using Kernel SHAP and the background dataset
-    explainer = shap.KernelExplainer(rf.predict, X_train)
+    explainer = shap.KernelExplainer(model.predict, X_train)
 
-    # Run initjs()
-    shap.initjs()
+    # # Run initjs()
+    # shap.initjs()
 
-    # Summary plot for each feature's impact on the output
-    shap_values = explainer.shap_values(X_test)
-    shap.summary_plot(shap_values, X_test, feature_names=X_test.columns)
+    # # Summary plot for each feature's impact on the output
+    # shap_values = explainer.shap_values(X_test)
+    # shap.summary_plot(shap_values, X_test, feature_names=X_test.columns)
 
-    # Individual SHAP value plot for a specific instance
-    instance_index = 0  # You can choose any instance index
-    shap.force_plot(explainer.expected_value, shap_values[instance_index, :], X_test.iloc[instance_index, :])
+    # # Individual SHAP value plot for a specific instance
+    # instance_index = 0  # You can choose any instance index
+    # shap.force_plot(explainer.expected_value, shap_values[instance_index, :], X_test.iloc[instance_index, :])
 
-    display_shap_plots(rf, X_train, X)
+    # display_shap_plots(rf, X_train, X)
 
 else:
     st.warning('👈 Upload a CSV file or click *"Load example data"* to get started!')
