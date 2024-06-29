@@ -295,19 +295,25 @@ if not df_crime_data_db.empty:
 
             # Plot box plot of the data with outliers replaced   
             with performance_col[2]:
-                st.header('Outliers percentage', divider='rainbow')
+                st.header('Outliers percentage plot', divider='rainbow')
                 plt.figure(figsize=(12, 8))
                 sns.boxplot(x="Year", y="Percentage", data=df_identify_outliers)
                 plt.title("Box plot identifying the outliers")
                 plt.xticks(rotation=45)
 
-                # Annotate each outlier point
-                for i in range(len(df_identify_outliers)):
-                    year = df_identify_outliers['Year'].iloc[i]
-                    percentage = df_identify_outliers['Percentage'].iloc[i]
+                # Add annotations
+                for i, row in df_identify_outliers.iterrows():  # range(len(df_identify_outliers)):
+                    plt.text(
+                        x=i % len(df_identify_outliers['Year'].unique()), 
+                        y=row['Percentage'] + 2, # df_identify_outliers['Percentage'][i] + 2,  # Adjust the position to avoid overlap with the box plot
+                        s=f"{df_identify_outliers['Percentage'][i]:.1f}", 
+                        fontsize=9,
+                        color='black',
+                        ha='center'
+                    )
 
                 # Offset the text slightly to avoid overlapping with the data point
-                plt.text(year, percentage, f"{percentage:.2f}", color='black', ha='center', va='bottom', fontsize=8)
+                #plt.text(year, percentage, f"{percentage:.2f}", color='black', ha='center', va='bottom', fontsize=8)
 
                 st.pyplot(plt)
 
@@ -319,6 +325,7 @@ if not df_crime_data_db.empty:
             
             if not (df_replace_outliers.empty):
                 df_outliers_replaced_melt = df_replace_outliers.melt(id_vars=['CrimeCategory'], var_name='Year', value_name='Percentage')
+                
 
                 # Create the graph using seaborn
                 plt.figure(figsize=(10, 6))
