@@ -361,6 +361,7 @@ if not df_crime_data_db.empty:
     parameters_col[0].metric(label="Data split ratio (% for Training Set)", value=parameter_split_size, delta="")
     parameters_col[1].metric(label="Number of estimators (n_estimators)", value=parameter_n_estimators, delta="")
     parameters_col[2].metric(label="Max features (max_features)", value=parameter_max_features_metric, delta="")
+    #parameters_col[4].metric(label="Min features (min_leaf)", value=parameter_min_samples_leaf, delta="")
         
     importances = model.feature_importances_
     feature_names = list(X.columns)
