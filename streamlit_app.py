@@ -45,10 +45,8 @@ from math import sqrt
 import warnings
 warnings.filterwarnings('ignore')
 
-mae_values = []
-mse_values = []
-r2_values = []
-mape_values = []
+mae_train_values, mse_train_values, r2_train_values, mape_train_values = [], [], [], []
+mae_test_values, mse_test_values, r2_test_values, mape_test_values = [], [], [], []
 
 st.set_page_config(page_title='ML Model Building', page_icon='🤖', layout='wide')
 
@@ -150,10 +148,23 @@ if not df_crime_data_db.empty:
 
         st.write("Preparing data ...")
         time.sleep(sleep_time)
-        
-      # Separate features and target
+       
+
+       # Dictionary to store predicted values
+        predictions_dict = {}
+        crime_categories_list = []
+        model_results_list = []
+
+        # Initialize empty lists for metrics and crime categories
+        crime_categories_list = df_crime_data_db['CrimeCategory'].tolist()
+
+    for index, row in df_crime_data_db.iterrows():
+
         X = df_crime_data_db .drop(columns=['CrimeCategory'])  # Drop the CrimeCategory column
         crime_category = df_crime_data_db['CrimeCategory']   # Keep the CrimeCategory column separately
+
+        #crime_categories_list.append(crime_category)
+        #st.write(crime_category)
 
         # Define y as a numeric target variable, such as the mean across years for each category
         y = df_crime_data_db.iloc[:, 1:].mean(axis=1)  # Assuming y should be the mean across all years
@@ -172,6 +183,8 @@ if not df_crime_data_db.empty:
         X_train_display.insert(0, 'CrimeCategory', crime_category_train)  # Insert as the first column
         X_test_display = X_test.copy()
         X_test_display.insert(0, 'CrimeCategory', crime_category_test)  # Insert as the first column
+
+        #st.write('X_train_display: ', X_test_display)
 
         if algorithm == 'ANN (MLPRegressor)':
             model = MLPRegressor()
@@ -204,47 +217,58 @@ if not df_crime_data_db.empty:
 
         model.fit(X_train, y_train)
 
-        # Define hyperparameter grid for GridSearchCV
-        # param_grid = {
-        #     'n_estimators': [100, 200, 300],
-        #     'max_features': ['auto', 'sqrt', 'log2'],
-        #     'min_samples_split': [2, 5, 10],
-        #     'min_samples_leaf': [1, 2, 4],
-        #     'max_depth': [None, 10, 20, 30]
-        # }
-        
-        # Fit the initial model
-        model.fit(X_train, y_train)
-
-        st.write("Applying model to make predictions ...")
-        time.sleep(sleep_time)
+        #st.write("Applying model to make predictions ...")
+        #time.sleep(sleep_time)
         y_train_pred = model.predict(X_train)
         y_test_pred = model.predict(X_test)
             
-        st.write("Calculating performance metrics ...")
-        time.sleep(sleep_time)
+        #st.write("Calculating performance metrics ...")
+        #time.sleep(sleep_time)
 
-         # Calculate various metrics
+    def calculate_metrics(row):
+        crime_category = row['CrimeCategory']
+        X = row.drop('CrimeCategory')  # Drop the CrimeCategory column
+        y_train = X.iloc[:-1].values   # Example: select the first 6 values as y_train
+        y_test = X.iloc[:-1].values    # Example: select the first 6 values as y_test
+    
+        # Example predictions (replace with your actual model predictions)
+        y_train_pred = y_train * 0.5
+        y_test_pred = y_test * 0.7
+    
+        # Calculate metrics
         mae_train = meanae(y_train, y_train_pred)
         mse_train = meanse(y_train, y_train_pred)
         r2_train = r2score(y_train, y_train_pred)
         mape_train = meanape(y_train, y_train_pred)
-
+    
         mae_test = meanae(y_test, y_test_pred)
         mse_test = meanse(y_test, y_test_pred)
         r2_test = r2score(y_test, y_test_pred)
         mape_test = meanape(y_test, y_test_pred)
+    
+        # Return metrics as a Series including CrimeCategory
+        return pd.Series({
+            'CrimeCategory': crime_category,
+            'Training MSE': mse_train,
+            'Training R2': r2_train,
+            'Training MAE': mae_train,
+            'Training MAPE': mape_train,
+            'Test MSE': mse_test,
+            'Test R2': r2_test,
+            'Test MAE': mae_test,
+            'Test MAPE': mape_test
+            })
             
-        if parameter_criterion == 'squared_error':
+    if parameter_criterion == 'squared_error':
             parameter_criterion_string = 'MSE'
-        else:
-            parameter_criterion_string = 'MAE'
+    else:
+        parameter_criterion_string = 'MAE'
 
-        model_results = pd.DataFrame([mse_train, r2_train, mae_train, mape_train, mse_test, r2_test, mae_test, mape_test ], index=[f'Training {parameter_criterion_string}', 'Training R2', 'Training mae', 'Training MAPE', f'Test {parameter_criterion_string}', 'Test R2','Test mae', 'Test MAPE'])        
-                  
-        for col in model_results.columns:
-            model_results[col] = pd.to_numeric(model_results[col], errors='ignore')
-        model_results = model_results.round(3)
+        # Apply the function to each row of df_crime_data_db and create model_results DataFrame
+    model_results = df_crime_data_db.apply(calculate_metrics, axis=1)
+
+        # Set 'CrimeCategory' as the index
+    model_results.set_index('CrimeCategory', inplace=True)
         
     status.update(label="Status", state="complete", expanded=False)
 
@@ -404,6 +428,7 @@ if not df_crime_data_db.empty:
     performance_col = st.columns((2, 0.2, 3))
     with performance_col[0]:
         st.header('Model performance', divider='rainbow')
+        #st.write('Model performance to be edited for now it is hidden')
         st.dataframe(model_results.T.reset_index().rename(columns={'index': 'Parameter', 0: 'Value'}))
     with performance_col[2]:
         st.header('Feature importance', divider='rainbow')
