@@ -41,6 +41,10 @@ from sklearn.metrics import (
     mean_absolute_percentage_error as meanape
 )
 
+from math import sqrt
+import warnings
+warnings.filterwarnings('ignore')
+
 mae_values = []
 mse_values = []
 r2_values = []
@@ -169,8 +173,6 @@ if not df_crime_data_db.empty:
         X_test_display = X_test.copy()
         X_test_display.insert(0, 'CrimeCategory', crime_category_test)  # Insert as the first column
 
-        feature_importances_ = ''
-
         if algorithm == 'ANN (MLPRegressor)':
             model = MLPRegressor()
             model = train_ann_model(parameter_n_estimators, parameter_max_features, parameter_min_samples_split, parameter_min_samples_leaf, parameter_random_state, parameter_criterion, parameter_bootstrap, parameter_oob_score)
@@ -263,6 +265,7 @@ if not df_crime_data_db.empty:
 
              # Prepare data for the graph
             df_outliers_melt = df_crime_data_db.melt(id_vars=['CrimeCategory'], var_name='Year', value_name='Percentage')
+            df_outliers_melt = df_outliers_melt.sort_values(by=['CrimeCategory', 'Year'])
 
             # Create the graph using seaborn
             plt.figure(figsize=(10, 6))
@@ -271,6 +274,12 @@ if not df_crime_data_db.empty:
             plt.xlabel('Year')
             plt.ylabel('Percentage')
             plt.legend(title='Crime Category', bbox_to_anchor=(1.05, 1), loc='upper left')
+
+            # Annotate each data point with its value
+            for i in range(df_outliers_melt.shape[0]):
+                plt.text(df_outliers_melt['Year'].iloc[i], df_outliers_melt['Percentage'].iloc[i], 
+                    f"{df_outliers_melt['Percentage'].iloc[i]:.2f}", color='black', ha='right', va='bottom')
+
             plt.xticks(rotation=45)
 
             # Display the graph in Streamlit
@@ -286,11 +295,20 @@ if not df_crime_data_db.empty:
 
             # Plot box plot of the data with outliers replaced   
             with performance_col[2]:
-                st.header('Outliers box plot of crime percentage', divider='rainbow')
+                st.header('Outliers percentage', divider='rainbow')
                 plt.figure(figsize=(12, 8))
                 sns.boxplot(x="Year", y="Percentage", data=df_identify_outliers)
                 plt.title("Box plot identifying the outliers")
                 plt.xticks(rotation=45)
+
+                # Annotate each outlier point
+                for i in range(len(df_identify_outliers)):
+                    year = df_identify_outliers['Year'].iloc[i]
+                    percentage = df_identify_outliers['Percentage'].iloc[i]
+
+                # Offset the text slightly to avoid overlapping with the data point
+                plt.text(year, percentage, f"{percentage:.2f}", color='black', ha='center', va='bottom', fontsize=8)
+
                 st.pyplot(plt)
 
     
@@ -300,7 +318,6 @@ if not df_crime_data_db.empty:
             st.dataframe(df_replace_outliers, height=210, use_container_width=True)
             
             if not (df_replace_outliers.empty):
-                graph = ''
                 df_outliers_replaced_melt = df_replace_outliers.melt(id_vars=['CrimeCategory'], var_name='Year', value_name='Percentage')
 
                 # Create the graph using seaborn
@@ -310,6 +327,13 @@ if not df_crime_data_db.empty:
                 plt.xlabel('Year')
                 plt.ylabel('Percentage')
                 plt.legend(title='Crime Category', bbox_to_anchor=(1.05, 1), loc='upper left')
+
+
+            # Annotate each data point with its value
+                for i in range(df_outliers_replaced_melt.shape[0]):
+                    plt.text(df_outliers_replaced_melt['Year'].iloc[i], df_outliers_replaced_melt['Percentage'].iloc[i], 
+                        f"{df_outliers_replaced_melt['Percentage'].iloc[i]:.2f}", color='black', ha='right', va='bottom')
+
                 plt.xticks(rotation=45)
 
                 # Display the graph in Streamlit
