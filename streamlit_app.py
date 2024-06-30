@@ -110,11 +110,11 @@ with st.sidebar:
         if identify_outlier:
             df_identify_outliers = identify_outliers(df_crime_data_db)
 
-        st.markdown('**1.3. Replace outliers with median**')
-        replace_outlier = st.toggle('Replace with Median')
+            st.markdown('**1.3. Replace outliers with median**')
+            replace_outlier = st.toggle('Replace with Median')
 
-        if replace_outlier:
-            df_replace_outliers = replace_outliers(df_crime_data_db)
+            if replace_outlier:
+                df_replace_outliers = replace_outliers(df_crime_data_db)
 
         st.markdown('**1.4. Set Test and Train Parameters**')
         parameter_split_size = st.slider('Data split ratio (% for Training Set)', 10, 90, 80, 5)
@@ -286,29 +286,31 @@ if not df_crime_data_db.empty:
     col[4].metric(label= split_ration, value= split_ration_value, delta="")
         
     with st.expander('Initial dataset', expanded=True):
+            visualise_initialdate = st.toggle('Visualise initial dataset')
             st.dataframe(df_crime_data_db, height=210, use_container_width=True)
 
              # Prepare data for the graph
             df_outliers_melt = df_crime_data_db.melt(id_vars=['CrimeCategory'], var_name='Year', value_name='Percentage')
             df_outliers_melt = df_outliers_melt.sort_values(by=['CrimeCategory', 'Year'])
 
-            # Create the graph using seaborn
-            plt.figure(figsize=(10, 6))
-            sns.lineplot(data=df_outliers_melt, x='Year', y='Percentage', hue='CrimeCategory', marker='o')
-            plt.title('Crime Trends Over the Years')
-            plt.xlabel('Year')
-            plt.ylabel('Percentage')
-            plt.legend(title='Crime Category', bbox_to_anchor=(1.05, 1), loc='upper left')
+            if visualise_initialdate:
+                # Create the graph using seaborn
+                plt.figure(figsize=(10, 6))
+                sns.lineplot(data=df_outliers_melt, x='Year', y='Percentage', hue='CrimeCategory', marker='o')
+                plt.title('Crime Trends Over the Years')
+                plt.xlabel('Year')
+                plt.ylabel('Percentage')
+                plt.legend(title='Crime Category', bbox_to_anchor=(1.05, 1), loc='upper left')
 
-            # Annotate each data point with its value
-            for i in range(df_outliers_melt.shape[0]):
-                plt.text(df_outliers_melt['Year'].iloc[i], df_outliers_melt['Percentage'].iloc[i], 
-                    f"{df_outliers_melt['Percentage'].iloc[i]:.2f}", color='black', ha='right', va='bottom')
+                # Annotate each data point with its value
+                for i in range(df_outliers_melt.shape[0]):
+                    plt.text(df_outliers_melt['Year'].iloc[i], df_outliers_melt['Percentage'].iloc[i], 
+                        f"{df_outliers_melt['Percentage'].iloc[i]:.2f}", color='black', ha='right', va='bottom')
 
-            plt.xticks(rotation=45)
+                plt.xticks(rotation=45)
 
-            # Display the graph in Streamlit
-            st.pyplot(plt)
+                # Display the graph in Streamlit
+                st.pyplot(plt)
 
     if not df_identify_outliers.empty:
         with st.expander('Identify outliers', expanded=True):
@@ -341,32 +343,33 @@ if not df_crime_data_db.empty:
 
     
     #df_replace_outliers
-    if not (df_replace_outliers.empty and df_identify_outliers.empty): 
+    if not (df_replace_outliers.empty and df_identify_outliers.empty) and replace_outlier: 
         with st.expander('Replaced outliers by the median', expanded=True):
+            visualise_replace_outliers = st.toggle('Visualise new outliers median dataset')
             st.dataframe(df_replace_outliers, height=210, use_container_width=True)
             
             if not (df_replace_outliers.empty):
                 df_outliers_replaced_melt = df_replace_outliers.melt(id_vars=['CrimeCategory'], var_name='Year', value_name='Percentage')
                 
+                if visualise_replace_outliers:
+                    # Create the graph using seaborn
+                    plt.figure(figsize=(10, 6))
+                    sns.lineplot(data=df_outliers_replaced_melt, x='Year', y='Percentage', hue='CrimeCategory', marker='o')
+                    plt.title('Crime Trends Over the Years with Outliers Replaced ')
+                    plt.xlabel('Year')
+                    plt.ylabel('Percentage')
+                    plt.legend(title='Crime Category', bbox_to_anchor=(1.05, 1), loc='upper left')
 
-                # Create the graph using seaborn
-                plt.figure(figsize=(10, 6))
-                sns.lineplot(data=df_outliers_replaced_melt, x='Year', y='Percentage', hue='CrimeCategory', marker='o')
-                plt.title('Crime Trends Over the Years with Outliers Replaced ')
-                plt.xlabel('Year')
-                plt.ylabel('Percentage')
-                plt.legend(title='Crime Category', bbox_to_anchor=(1.05, 1), loc='upper left')
 
+                    # Annotate each data point with its value
+                    for i in range(df_outliers_replaced_melt.shape[0]):
+                        plt.text(df_outliers_replaced_melt['Year'].iloc[i], df_outliers_replaced_melt['Percentage'].iloc[i], 
+                            f"{df_outliers_replaced_melt['Percentage'].iloc[i]:.2f}", color='black', ha='right', va='bottom')
 
-            # Annotate each data point with its value
-                for i in range(df_outliers_replaced_melt.shape[0]):
-                    plt.text(df_outliers_replaced_melt['Year'].iloc[i], df_outliers_replaced_melt['Percentage'].iloc[i], 
-                        f"{df_outliers_replaced_melt['Percentage'].iloc[i]:.2f}", color='black', ha='right', va='bottom')
+                    plt.xticks(rotation=45)
 
-                plt.xticks(rotation=45)
-
-                # Display the graph in Streamlit
-                st.pyplot(plt)
+                    # Display the graph 
+                    st.pyplot(plt)
 
    # Display the updated train and test splits
     with st.expander('Train split', expanded=False):
@@ -424,6 +427,7 @@ if not df_crime_data_db.empty:
         ).properties(height=250)
 
     performance_col = st.columns((2, 0.2, 3))
+
     with performance_col[0]:
         st.header('Model performance', divider='rainbow')
         #st.write('Model performance to be edited for now it is hidden')
@@ -446,15 +450,15 @@ if not df_crime_data_db.empty:
         
     df_prediction = pd.concat([df_train, df_test], axis=0)
         
-    prediction_col = st.columns((2, 0.2, 3))
+    prediction_col = st.columns((1, 0.1, 1))
         
     with prediction_col[0]:
         st.subheader("Training Data")
-        st.dataframe(df_train, height=320, use_container_width=True)
+        st.dataframe(df_train.style.set_properties(**{'text-align': 'center', 'font-size': '11pt'}).hide(axis="index"), height=320, use_container_width=True)
 
     with prediction_col[2]:
         st.subheader("Testing Data")
-        st.dataframe(df_test, height=320, use_container_width=True)
+        st.dataframe(df_test.style.set_properties(**{'text-align': 'center', 'font-size': '11pt'}).hide(axis="index"), height=320, use_container_width=True)
 
 # Display the scatter plot below the DataFrames
 scatter = alt.Chart(df_prediction).mark_circle(size=60).encode(
