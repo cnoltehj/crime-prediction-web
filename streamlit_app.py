@@ -50,7 +50,7 @@ mae_test_values, mse_test_values, r2_test_values, mape_test_values = [], [], [],
 
 st.set_page_config(page_title='ML Model Building', page_icon='🤖', layout='wide')
 
-st.title('🤖 Interpretable Regression ML Model Builder')
+st.title('Interpretable Regression ML Model Builder')
 
 with st.expander('About this app'):
     st.markdown('**What can this app do?**')
@@ -72,7 +72,7 @@ with st.expander('About this app'):
     ''', language='markdown')
 
 with st.sidebar:
-    st.header('1. Input data')
+    st.header(f'1. Input data')
 
     df_crime_data_db = pd.DataFrame()
     df_identify_outliers = pd.DataFrame()
@@ -184,8 +184,6 @@ if not df_crime_data_db.empty:
         X_test_display = X_test.copy()
         X_test_display.insert(0, 'CrimeCategory', crime_category_test)  # Insert as the first column
 
-        #st.write('X_train_display: ', X_test_display)
-
         if algorithm == 'ANN (MLPRegressor)':
             model = MLPRegressor()
             model = train_ann_model(parameter_n_estimators, parameter_max_features, parameter_min_samples_split, parameter_min_samples_leaf, parameter_random_state, parameter_criterion, parameter_bootstrap, parameter_oob_score)
@@ -234,6 +232,9 @@ if not df_crime_data_db.empty:
         # Example predictions (replace with your actual model predictions)
         y_train_pred = y_train * 0.5
         y_test_pred = y_test * 0.7
+
+        # Store predicted values in the dictionary
+        predictions_dict[crime_category] = {'true_values': y_test, 'predicted_values': y_test_pred}
     
         # Calculate metrics
         mae_train = meanae(y_train, y_train_pred)
@@ -272,7 +273,7 @@ if not df_crime_data_db.empty:
         
     status.update(label="Status", state="complete", expanded=False)
 
-    st.header('Input data', divider='rainbow')
+    st.header(f'Input data for {algorithm} algorithm', divider='rainbow')
     train_ratio = parameter_split_size
     test_ratio = 100 - parameter_split_size
     split_ration_value = f'{train_ratio} : {test_ratio}'
@@ -335,9 +336,6 @@ if not df_crime_data_db.empty:
                         color='black',
                         ha='center'
                     )
-
-                # Offset the text slightly to avoid overlapping with the data point
-                #plt.text(year, percentage, f"{percentage:.2f}", color='black', ha='center', va='bottom', fontsize=8)
 
                 st.pyplot(plt)
 
@@ -408,7 +406,7 @@ if not df_crime_data_db.empty:
                 mime="application/octet-stream"
                 )
         
-    st.header('Model parameters', divider='rainbow')
+    st.header(f'{algorithm} model parameters', divider='rainbow')
     parameters_col = st.columns(3)
     parameters_col[0].metric(label="Data split ratio (% for Training Set)", value=parameter_split_size, delta="")
     parameters_col[1].metric(label="Number of estimators (n_estimators)", value=parameter_n_estimators, delta="")
@@ -434,12 +432,11 @@ if not df_crime_data_db.empty:
         st.header('Feature importance', divider='rainbow')
         st.altair_chart(bars, theme='streamlit', use_container_width=True)
 
-    st.header('Prediction results', divider='rainbow')
-    s_y_train = pd.Series(y_train, name='actual').reset_index(drop=True)
-    s_y_train_pred = pd.Series(y_train_pred, name='predicted').reset_index(drop=True)
+    st.header(f'{algorithm} prediction results', divider='rainbow')
+    s_y_train = pd.Series(y_train, name='True').reset_index(drop=True)
+    s_y_train_pred = pd.Series(y_train_pred, name='Predicted').reset_index(drop=True)
     df_train = pd.DataFrame(data=[s_y_train, s_y_train_pred], index=None).T
     df_train['class'] = 'train'
-            
     s_y_test = pd.Series(y_test, name='actual').reset_index(drop=True)
     s_y_test_pred = pd.Series(y_test_pred, name='predicted').reset_index(drop=True)
     df_test = pd.DataFrame(data=[s_y_test, s_y_test_pred], index=None).T
@@ -460,7 +457,7 @@ if not df_crime_data_db.empty:
                 )
         st.altair_chart(scatter, theme='streamlit', use_container_width=True)
 
-    st.header('Shapley values', divider='rainbow')
+    st.header(f'{algorithm} Shapley values', divider='rainbow')
     with st.expander('Shapley values'):
         print('empty space')
     #     # Function to preprocess the data and get the XGBoost model prediction
