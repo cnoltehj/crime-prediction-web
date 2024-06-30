@@ -433,13 +433,15 @@ if not df_crime_data_db.empty:
         st.altair_chart(bars, theme='streamlit', use_container_width=True)
 
     st.header(f'{algorithm} prediction results', divider='rainbow')
-    s_y_train = pd.Series(y_train, name='True').reset_index(drop=True)
-    s_y_train_pred = pd.Series(y_train_pred, name='Predicted').reset_index(drop=True)
-    df_train = pd.DataFrame(data=[s_y_train, s_y_train_pred], index=None).T
+    s_y_train = pd.Series(y_train, name='True Trained').reset_index(drop=True)
+    s_y_train_pred = pd.Series(y_train_pred, name='Predicted Trained').reset_index(drop=True)
+    #df_train = pd.DataFrame(data=[s_y_train, s_y_train_pred], index=None).T
+    df_train = pd.DataFrame({'CrimeCategory': crime_category_train, 'True Trained': s_y_train, 'Predicted Trained': s_y_train_pred})
     df_train['class'] = 'train'
     s_y_test = pd.Series(y_test, name='actual').reset_index(drop=True)
     s_y_test_pred = pd.Series(y_test_pred, name='predicted').reset_index(drop=True)
-    df_test = pd.DataFrame(data=[s_y_test, s_y_test_pred], index=None).T
+    #df_test = pd.DataFrame(data=[s_y_test, s_y_test_pred], index=None).T
+    df_test = pd.DataFrame({'CrimeCategory': crime_category_test, 'actual': s_y_test, 'predicted': s_y_test_pred})
     df_test['class'] = 'test'
         
     df_prediction = pd.concat([df_train, df_test], axis=0)
