@@ -75,6 +75,7 @@ with st.sidebar:
     st.header(f'1. Input data')
 
     df_crime_data_db = pd.DataFrame()
+    df_crime_data_db_display = pd.DataFrame()
     df_identify_outliers = pd.DataFrame()
     df_replace_outliers = pd.DataFrame()
     df_provinces = pd.DataFrame()
@@ -472,30 +473,14 @@ scatter = alt.Chart(df_prediction).mark_circle(size=60).encode(
 st.altair_chart(scatter, theme='streamlit', use_container_width=True)
 st.header(f'{algorithm} Shapley values', divider='rainbow')
 with st.expander('Shapley values'):
-            print('empty space')
-    #     # Function to preprocess the data and get the XGBoost model prediction
-    # # def model_predict(X):
-    # #     return  best_mlp_model.predict(X) 
- 
-       
-    # Predict
-model_predict = model.predict(X_test)
+    print('empty space')
+    st.write(model)
+    st.write(X_train)
+    st.write(X_test)
+    st.write(df_crime_data_db)
+    st.write(df_crime_data_db_display)
+    display_shap_plots(model, X_train,X_test)
 
-    # Explainer using Kernel SHAP and the background dataset
-explainer = shap.KernelExplainer(model.predict, X_train)
-
-    # # Run initjs()
-    # shap.initjs()
-
-    # # Summary plot for each feature's impact on the output
-    # shap_values = explainer.shap_values(X_test)
-    # shap.summary_plot(shap_values, X_test, feature_names=X_test.columns)
-
-    # # Individual SHAP value plot for a specific instance
-    # instance_index = 0  # You can choose any instance index
-    # shap.force_plot(explainer.expected_value, shap_values[instance_index, :], X_test.iloc[instance_index, :])
-
-    # display_shap_plots(rf, X_train, X)
 
 # else:
 #     st.warning('👈 Upload a CSV file or click *"Load example data"* to get started!')
