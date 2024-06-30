@@ -449,29 +449,36 @@ if not df_crime_data_db.empty:
     prediction_col = st.columns((2, 0.2, 3))
         
     with prediction_col[0]:
-        st.dataframe(df_prediction, height=320, use_container_width=True)
+        st.subheader("Training Data")
+        st.dataframe(df_train, height=320, use_container_width=True)
 
     with prediction_col[2]:
-        scatter = alt.Chart(df_prediction).mark_circle(size=60).encode(
-                        x='actual',
-                        y='predicted',
-                           color='class'
-                )
-        st.altair_chart(scatter, theme='streamlit', use_container_width=True)
+        st.subheader("Testing Data")
+        st.dataframe(df_test, height=320, use_container_width=True)
 
-    st.header(f'{algorithm} Shapley values', divider='rainbow')
-    with st.expander('Shapley values'):
-        print('empty space')
+# Display the scatter plot below the DataFrames
+scatter = alt.Chart(df_prediction).mark_circle(size=60).encode(
+    x='actual',
+    y='predicted',
+    color='class'
+).properties(
+    height=400
+)
+
+st.altair_chart(scatter, theme='streamlit', use_container_width=True)
+st.header(f'{algorithm} Shapley values', divider='rainbow')
+with st.expander('Shapley values'):
+            print('empty space')
     #     # Function to preprocess the data and get the XGBoost model prediction
     # # def model_predict(X):
     # #     return  best_mlp_model.predict(X) 
  
        
     # Predict
-    model_predict = model.predict(X_test)
+model_predict = model.predict(X_test)
 
     # Explainer using Kernel SHAP and the background dataset
-    explainer = shap.KernelExplainer(model.predict, X_train)
+explainer = shap.KernelExplainer(model.predict, X_train)
 
     # # Run initjs()
     # shap.initjs()
@@ -486,5 +493,5 @@ if not df_crime_data_db.empty:
 
     # display_shap_plots(rf, X_train, X)
 
-else:
-    st.warning('👈 Upload a CSV file or click *"Load example data"* to get started!')
+# else:
+#     st.warning('👈 Upload a CSV file or click *"Load example data"* to get started!')
