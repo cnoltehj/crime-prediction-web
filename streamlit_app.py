@@ -47,6 +47,18 @@ warnings.filterwarnings('ignore')
 
 mae_train_values, mse_train_values, r2_train_values, mape_train_values = [], [], [], []
 mae_test_values, mse_test_values, r2_test_values, mape_test_values = [], [], [], []
+df_crime_data_db = pd.DataFrame()
+df_display_crime_data_db = pd.DataFrame() #  Currently only for shapley can be deleted if Shapley use pivot table
+df_identify_outliers_db = pd.DataFrame()
+df_replace_outliers_db = pd.DataFrame()
+df_pivot_crime_db = pd.DataFrame()
+df_provinces_db = pd.DataFrame()
+df_policestations_db = pd.DataFrame()
+
+# Dictionary to store predicted values
+predictions_dict = {}
+crime_categories_list = []
+model_results_list = []
 
 st.set_page_config(page_title='ML Model Building', page_icon='🤖', layout='wide')
 
@@ -74,14 +86,8 @@ with st.expander('About this app'):
 with st.sidebar:
     st.header(f'1. Input data')
 
-    df_crime_data_db = pd.DataFrame()
-    df_crime_data_db_display = pd.DataFrame()
-    df_identify_outliers = pd.DataFrame()
-    df_replace_outliers = pd.DataFrame()
-    df_provinces = pd.DataFrame()
-    df_policestations = pd.DataFrame()
-
     inputdatatype = st.radio('Select input data type', options=['Use database data'], index=0)
+    visualise_initail_mean = st.toggle('Display initial mean values')
 
     if inputdatatype == 'Use database data':
         st.markdown('**1.1. Use database data**')
@@ -109,18 +115,19 @@ with st.sidebar:
         identify_outlier = st.toggle('Identify outliers')
         
         if identify_outlier:
-            df_identify_outliers = identify_outliers(df_crime_data_db)
+            df_identify_outliers_db = identify_outliers(df_crime_data_db)
 
             st.markdown('**1.3. Replace outliers with median**')
             replace_outlier = st.toggle('Replace with Median')
 
             if replace_outlier:
                 df_replace_outliers = replace_outliers(df_crime_data_db)
+                visualise_outliers_mean = st.toggle('Display outliers mean values')
 
         st.markdown('**1.4. Set Test and Train Parameters**')
         parameter_split_size = st.slider('Data split ratio (% for Training Set)', 10, 90, 80, 5)
 
-
+        
     st.subheader('2. Select Algorithm')
     with st.expander('Algorithms'):
         algorithm = st.radio('', options=['ANN (MLPRegressor)', 'KNN', 'RFM', 'SVR','XGBoost'], index=2)
@@ -149,23 +156,19 @@ if not df_crime_data_db.empty:
 
         st.write("Preparing data ...")
         time.sleep(sleep_time)
-       
 
-       # Dictionary to store predicted values
-        predictions_dict = {}
-        crime_categories_list = []
-        model_results_list = []
+    # Initialize empty lists for metrics and crime categories
+    crime_categories_list = df_crime_data_db['CrimeCategory'].tolist()
 
-        # Initialize empty lists for metrics and crime categories
-        crime_categories_list = df_crime_data_db['CrimeCategory'].tolist()
+    # Transpose the DataFrame so that years become columns
+    df_pivot_crime_db = df_crime_data_db.set_index('CrimeCategory').T.reset_index()
+    df_pivot_crime_db.rename(columns={'index': 'Year'}, inplace=True)
 
-    for index, row in df_crime_data_db.iterrows():
+    for index, row in df_pivot_crime_db.iterrows():
 
-        X = df_crime_data_db .drop(columns=['CrimeCategory'])  # Drop the CrimeCategory column
-        crime_category = df_crime_data_db['CrimeCategory']   # Keep the CrimeCategory column separately
-
-        #crime_categories_list.append(crime_category)
-        #st.write(crime_category)
+        X = df_pivot_crime_db.drop(columns=['Year'])
+        y = df_crime_data_db.iloc[:, 1:].mean(axis=1)  # Mean across all years
+        crime_category = df_crime_data_db['CrimeCategory']
 
         # Define y as a numeric target variable, such as the mean across years for each category
         y = df_crime_data_db.iloc[:, 1:].mean(axis=1)  # Assuming y should be the mean across all years
@@ -173,7 +176,7 @@ if not df_crime_data_db.empty:
         X_train, X_test, y_train, y_test, crime_category_train, crime_category_test = train_test_split(
         X, y, crime_category, test_size=(100-parameter_split_size)/100, random_state=parameter_random_state)
 
-       # Reset indices to ensure proper alignment
+        # Reset indices to ensure proper alignment
         crime_category_train = crime_category_train.reset_index(drop=True)
         crime_category_test = crime_category_test.reset_index(drop=True)
         X_train = X_train.reset_index(drop=True)
@@ -209,20 +212,20 @@ if not df_crime_data_db.empty:
         if parameter_max_features == 'all':
             parameter_max_features = None  # Use None for RandomForestRegressor to consider all features
             parameter_max_features_metric = X.shape[1]  # Number of features
-        elif parameter_max_features == 'sqrt' or parameter_max_features == 'log2':
+        elif parameter_max_features in ['sqrt','log2']: #parameter_max_features == 'sqrt' or parameter_max_features == 'log2':
             parameter_max_features_metric = parameter_max_features  # Keep track of the metric used
         else:
             parameter_max_features_metric = int(parameter_max_features)  # Convert to integer if numeric
 
         model.fit(X_train, y_train)
 
-        #st.write("Applying model to make predictions ...")
-        #time.sleep(sleep_time)
+        st.write("Applying model to make predictions ...")
+        time.sleep(sleep_time)
         y_train_pred = model.predict(X_train)
         y_test_pred = model.predict(X_test)
             
-        #st.write("Calculating performance metrics ...")
-        #time.sleep(sleep_time)
+        st.write("Calculating performance metrics ...")
+        time.sleep(sleep_time)
 
     def calculate_metrics(row):
         crime_category = row['CrimeCategory']
@@ -313,28 +316,60 @@ if not df_crime_data_db.empty:
                 # Display the graph in Streamlit
                 st.pyplot(plt)
 
-    if not df_identify_outliers.empty:
+    with st.expander('Initial mean values', expanded=True):
+        if(visualise_initail_mean):
+            visualise_initial_mean_plot = st.toggle('Visualise initial mean plot')
+            # Create DataFrame
+            df_crime_data_db = pd.DataFrame(df_crime_data_db)
+            # Compute the mean values for each crime category, excluding the 'CrimeCategory' column
+            df_crime_data_db['Mean'] = df_crime_data_db.iloc[:, 1:].mean(axis=1)
+
+            # Extract the crime categories and their corresponding mean values
+            crime_category = df_crime_data_db['CrimeCategory']
+            mean_initial_values = df_crime_data_db['Mean']
+
+            # Colors for the bar plot
+            colors = ['blue', 'green', 'red', 'purple', 'orange', 'b', 'g']
+
+            # Create a bar plot for the mean values
+            plt.figure(figsize=(10, 6))
+            plt.barh(crime_category, mean_initial_values, color=colors)
+            plt.title('Mean Value for Crime Categories between 2016 - 2023')
+            plt.xlabel('Mean values')
+            plt.ylabel('Crime Categories')
+
+            # Add labels to the bars
+            for i, value in enumerate(mean_initial_values):
+                plt.text(value, i, f'{value:.2f}', va='center', ha='left', fontsize=10, fontweight='bold', color=colors[i % len(colors)])
+        
+            st.write(df_crime_data_db)
+
+            if(visualise_initial_mean_plot):
+                # Display the graph 
+                st.pyplot(plt)
+
+    if not df_identify_outliers_db.empty:
         with st.expander('Identify outliers', expanded=True):
             performance_col = st.columns((2, 0.2, 3))
 
             with performance_col[0]:
                 st.header('Outliers', divider='rainbow')
-                st.dataframe(df_identify_outliers)
+                st.dataframe(df_identify_outliers_db)
 
             # Plot box plot of the data with outliers replaced   
             with performance_col[2]:
                 st.header('Outliers percentage plot', divider='rainbow')
                 plt.figure(figsize=(12, 8))
-                sns.boxplot(x="Year", y="Percentage", data=df_identify_outliers)
+                sns.boxplot(x="Year", y="Percentage", data=df_identify_outliers_db)
                 plt.title("Box plot identifying the outliers")
                 plt.xticks(rotation=45)
 
                 # Add annotations
-                for i, row in df_identify_outliers.iterrows():  # range(len(df_identify_outliers)):
+                for i, row in df_identify_outliers_db.iterrows():  # range(len(df_identify_outliers)):
                     plt.text(
-                        x=i % len(df_identify_outliers['Year'].unique()), 
+                        x=i % len(df_identify_outliers_db['Year'].unique()), 
                         y=row['Percentage'] + 2, # df_identify_outliers['Percentage'][i] + 2,  # Adjust the position to avoid overlap with the box plot
-                        s=f"{df_identify_outliers['Percentage'][i]:.1f}", 
+                        s=f"{df_identify_outliers_db['Percentage'][i]:.1f}", 
                         fontsize=9,
                         color='black',
                         ha='center'
@@ -342,9 +377,8 @@ if not df_crime_data_db.empty:
 
                 st.pyplot(plt)
 
-    
     #df_replace_outliers
-    if not (df_replace_outliers.empty and df_identify_outliers.empty) and replace_outlier: 
+    if not (df_replace_outliers_db.empty and df_identify_outliers_db.empty) and replace_outlier: 
         with st.expander('Replaced outliers by the median', expanded=True):
             visualise_replace_outliers = st.toggle('Visualise new outliers median dataset')
             st.dataframe(df_replace_outliers, height=210, use_container_width=True)
@@ -371,6 +405,41 @@ if not df_crime_data_db.empty:
 
                     # Display the graph 
                     st.pyplot(plt)
+
+
+        with st.expander('Outliers Mean values', expanded=True):
+            if(visualise_outliers_mean):
+                visualise_outliers_mean_plot = st.toggle('Visualise outliers mean plot')
+
+                # Create DataFrame
+                df_replace_outliers = pd.DataFrame(df_replace_outliers)
+
+                # # Compute the mean values for each crime category, excluding the 'CrimeCategory' column
+                # df_replace_outliers['Mean'] = df_replace_outliers.iloc[:, 1:].mean(axis=1)
+
+                # # Extract the crime categories and their corresponding mean values
+                # df_replace_outliers = df_replace_outliers['CrimeCategory']
+                # mean_outliers_values = df_replace_outliers['Mean']
+
+                # # Colors for the bar plot
+                # colors = ['blue', 'green', 'red', 'purple', 'orange', 'b', 'g']
+
+                # # Create a bar plot for the mean values
+                # plt.figure(figsize=(10, 6))
+                # plt.barh(crime_category, mean_outliers_values, color=colors)
+                # plt.title('Outliers Mean Value for Crime Categories between 2016 - 2023')
+                # plt.xlabel('Mean values')
+                # plt.ylabel('Crime Categories')
+
+                # # Add labels to the bars
+                # for i, value in enumerate(mean_outliers_values):
+                #     plt.text(value, i, f'{value:.2f}', va='center', ha='left', fontsize=10, fontweight='bold', color=colors[i % len(colors)])
+        
+                # st.write(df_replace_outliers)
+
+                # if(visualise_outliers_mean_plot):
+                #     # Display the graph 
+                #     st.pyplot(plt)
 
    # Display the updated train and test splits
     with st.expander('Train split', expanded=False):
@@ -473,14 +542,6 @@ scatter = alt.Chart(df_prediction).mark_circle(size=60).encode(
 st.altair_chart(scatter, theme='streamlit', use_container_width=True)
 st.header(f'{algorithm} Shapley values', divider='rainbow')
 with st.expander('Shapley values'):
-    print('empty space')
-    st.write(model)
-    st.write(X_train)
-    st.write(X_test)
-    st.write(df_crime_data_db)
-    st.write(df_crime_data_db_display)
     display_shap_plots(model, X_train,X_test)
-
-
 # else:
 #     st.warning('👈 Upload a CSV file or click *"Load example data"* to get started!')
