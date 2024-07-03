@@ -21,18 +21,19 @@ from dataRequest.crimedbRequest import (
     fetch_provinces_data, 
     fetch_policestation_data
     )
-from modelResponse.modeltrainingResponse import (
-    train_rfm_model, 
-    train_ann_model,  
-    train_knn_model, 
-    train_svr_model, 
-    train_xgb_model
+from modelResponse.paramgridsResponse import (
+    param_grids_rfm_model, 
+    param_grids_ann_model,  
+    param_grids_knn_model, 
+    param_grids_svr_model, 
+    param_grids_xgb_model,
+    param_grids_all_models
     )
 from modelResponse.outliersResponse import (
     identify_outliers, 
     replace_outliers
     )
-from modelResponse.hyperparametersResponse import mse_gridSearchCV
+from modelResponse.hyperparametersResponse import mlp_gridSearchCV
 from shapleyPostHocResponse.shapleyPostHocResopnse import display_shap_plots
 from sklearn.metrics import ( 
     mean_absolute_error as meanae, 
@@ -100,7 +101,10 @@ with st.sidebar:
             # Ensure the index is within the valid range
             valid_index = min(0, len(df_policestations) - 1)
             
-            if province_code_value == 'ZA.WC':
+            # TODO add for all other provinces
+            # TODO pass policestation count instead of statics value
+            # TODO get province_code_value from province select and remove static value
+            if province_code_value == 'ZA.WC': # 
                 valid_index = 110
 
             police_station_name = st.selectbox('Select Police Station', df_policestations['StationName'], format_func=lambda x: x, index=valid_index)
@@ -130,22 +134,48 @@ with st.sidebar:
         
     st.subheader('2. Select Algorithm')
     with st.expander('Algorithms'):
-        algorithm = st.radio('', options=['ANN (MLPRegressor)', 'KNN', 'RFM', 'SVR','XGBoost'], index=2)
+        algorithm = st.radio('', options=['All' ,'ANN (MLPRegressor)', 'KNN', 'RFM', 'SVR','XGBoost'], index=0)
 
     st.subheader('3. Learning Parameters')
     with st.expander('See parameters', expanded=False):
-            parameter_n_estimators = st.slider('Number of estimators (n_estimators)', 0, 1000, 100, 100)
-            parameter_max_features = st.select_slider('Max features (max_features)', options=['sqrt', 'log2', 'all']) #['all', 'sqrt', 'log2']
-            parameter_min_samples_split = st.slider('Minimum number of samples required to split an internal node (min_samples_split)', 2, 10, 2, 1)
-            parameter_min_samples_leaf = st.slider('Minimum number of samples required to be at a leaf node (min_samples_leaf)', 1, 10, 2, 1)
+            if algorithm in ['All', 'RFM' , 'XGBoost']:
+                parameter_n_estimators = st.slider('Number of estimators (n_estimators)', 10, 50,  100)  #1000
 
-    st.subheader('4. General Parameters')
-    with st.expander('See parameters', expanded=False):
-        parameter_random_state = st.slider('Seed number (random_state)', 0, 1000, 42, 1)
-        parameter_criterion = st.select_slider('Performance measure (criterion)', options=['squared_error', 'absolute_error', 'friedman_mse'])
-        parameter_bootstrap = st.select_slider('Bootstrap samples when building trees (bootstrap)', options=[True, False])
-        parameter_oob_score = st.select_slider('Whether to use out-of-bag samples to estimate the R^2 on unseen data (oob_score)', options=[False, True])
+            if algorithm in ['All','RFM']:
+                parameter_max_features = st.select_slider('Max features (max_features)', options=['auto','sqrt', 'log2']) 
+                parameter_min_samples_split = st.slider('Minimum number of samples required to split an internal node (min_samples_split)', 1, 2, 5, 10)
+                parameter_min_samples_leaf = st.slider('Minimum number of samples required to be at a leaf node (min_samples_leaf)', 1, 10, 2, 1)
+            
+            elif algorithm in ['All', 'ANN (MLPRegressor)']:
+                parameter_hidden_layer_size = st.select_slider('Hidden layers size is the  number of neorons in each hidden layer (hidden_layer_size)', options=[(50, 50), (100,)]) 
+                parameter_activation = st.select_slider('Activation function for the hidden layer (activation)', options=['tanh', 'relu']) 
+                parameter_solver = st.select_slider('Solver for weight optimization (solver) ', options=['adam', 'sgd']) 
+            elif algorithm in ['All','KNN']:
+                parameter_n_neighbors = st.select_slider('Number of neighbors to use (n_neighbors ) ', options=[3, 5, 7]) 
+                parameter_weights = st.select_slider('Weight function used in prediction (weights)', options=['uniform', 'distance']) 
+            elif algorithm in ['All','SVR']:
+                parameter_kernel = st.select_slider('Specifies the kernel type to be (kernel)', options=['linear', 'rbf'])  
+                parameter_C = st.select_slider('Regularization parameter (C)', options=[1,10]) 
+                parameter_epsilon = st.select_slider('Epsilon in the epsilon-SVR (epsilon)', options=[0.1 , 0.2]) 
+            elif algorithm in ['All', 'XGBoost']:
+                parameter_learning_rate = st.select_slider('Boosting learning rate (learning_rate)', options=[0.01, 0.1]) 
+                parameter_max_depth = st.select_slider('Maximum depth of a tree (max_depth)', options=[3,5,7]) 
+                parameter_min_child_weight = st.select_slider('Minimum sum of instance weight (hessian) needed in a child (min_child_weight)', options=[1,3]) 
+                parameter_subsample = st.select_slider('Subsample ratio of the training instances (subsample)', options=[0.8, 1.0]) 
+                parameter_cosample_bytree = st.select_slider('Subsample ratio of columns when constructing each tree (cosample_bytree)', options=[0.8, 1.0]) 
 
+    if algorithm in ['RFM' , 'XGBoost']:
+        st.subheader('4. General Parameters')
+        with st.expander('See parameters', expanded=False):
+            if algorithm in ['RFM' , 'XGBoost']:
+                parameter_random_state = st.slider('Seed number (random_state)', 0, 1000, 42, 1)
+
+            if algorithm == 'RFM':
+                parameter_criterion = st.select_slider('Performance measure (criterion)', options=['squared_error', 'absolute_error', 'friedman_mse', 'poisson'])
+                parameter_bootstrap = st.select_slider('Bootstrap samples when building trees (bootstrap)', options=[True, False])
+                parameter_oob_score = st.select_slider('Whether to use out-of-bag samples to estimate the R^2 on unseen data (oob_score)', options=[False, True])
+        
+    
     sleep_time = st.slider('Sleep time', 0, 3, 0)
 
 if not df_crime_data_db.empty: 
@@ -174,7 +204,7 @@ if not df_crime_data_db.empty:
         y = df_crime_data_db.iloc[:, 1:].mean(axis=1)  # Assuming y should be the mean across all years
 
         X_train, X_test, y_train, y_test, crime_category_train, crime_category_test = train_test_split(
-        X, y, crime_category, test_size=(100-parameter_split_size)/100, random_state=parameter_random_state)
+        X, y, crime_category, test_size=(100-parameter_split_size)/100, random_state= 42)
 
         # Reset indices to ensure proper alignment
         crime_category_train = crime_category_train.reset_index(drop=True)
@@ -188,44 +218,59 @@ if not df_crime_data_db.empty:
         X_test_display = X_test.copy()
         X_test_display.insert(0, 'CrimeCategory', crime_category_test)  # Insert as the first column
 
-        if algorithm == 'ANN (MLPRegressor)':
-            model = MLPRegressor()
-            model = train_ann_model(parameter_n_estimators, parameter_max_features, parameter_min_samples_split, parameter_min_samples_leaf, parameter_random_state, parameter_criterion, parameter_bootstrap, parameter_oob_score)
-        
+        if algorithm == 'All':
+            param_grid = param_grids_all_models()
+
+            # Define the models
+            mlp_model = {
+                    'ANN (MLPRegressor)': MLPRegressor(),
+                    'KNN': KNeighborsRegressor(),
+                    'RFM': RandomForestRegressor(),
+                    'SVR': SVR(),
+                    'XGBoost': XGBRegressor()
+                    }  
+
+        elif algorithm == 'ANN (MLPRegressor)':
+            param_grid = param_grids_ann_model(parameter_hidden_layer_size,parameter_activation,parameter_solver)
+
+            mlp_model = {'ANN (MLPRegressor)': MLPRegressor()}
+
         elif algorithm == 'KNN':
-            model = KNeighborsRegressor()
-            model = train_knn_model(parameter_n_estimators, parameter_max_features, parameter_min_samples_split, parameter_min_samples_leaf, parameter_random_state, parameter_criterion, parameter_bootstrap, parameter_oob_score)
+            param_grid = param_grids_knn_model(parameter_n_neighbors, parameter_weights)
+
+            mlp_model = {'KNN': KNeighborsRegressor()}  
 
         elif algorithm == 'RFM':
-            model = RandomForestRegressor()
-            model = train_rfm_model(parameter_n_estimators, parameter_max_features, parameter_min_samples_split, parameter_min_samples_leaf, parameter_random_state, parameter_criterion, parameter_bootstrap, parameter_oob_score)
-           
+            param_grid = param_grids_rfm_model(parameter_n_estimators, parameter_max_features, parameter_min_samples_split, parameter_min_samples_leaf, parameter_random_state, parameter_criterion, parameter_bootstrap, parameter_oob_score)
+
+            mlp_model = {'RFM': RandomForestRegressor()}
+
         elif algorithm == 'SVR':
-            model = SVR()
-            model = train_svr_model(parameter_n_estimators, parameter_max_features, parameter_min_samples_split, parameter_min_samples_leaf, parameter_random_state, parameter_criterion, parameter_bootstrap, parameter_oob_score)
+            param_grid = param_grids_svr_model(parameter_kernel, parameter_C, parameter_epsilon)
 
+            mlp_model = {
+                    'ANN (MLPRegressor)': MLPRegressor(),
+                    'KNN': KNeighborsRegressor(),
+                    'RFM': RandomForestRegressor(),
+                    'SVR': SVR(),
+                    'XGBoost': XGBRegressor()
+                    }  
         elif algorithm == 'XGBoost':
-            model = XGBRegressor()
-            model = train_xgb_model(parameter_n_estimators, parameter_max_features, parameter_min_samples_split, parameter_min_samples_leaf, parameter_random_state, parameter_criterion, parameter_bootstrap, parameter_oob_score)
 
-        # Adjust the computation of max_features
-        if parameter_max_features == 'all':
-            parameter_max_features = None  # Use None for RandomForestRegressor to consider all features
-            parameter_max_features_metric = X.shape[1]  # Number of features
-        elif parameter_max_features in ['sqrt','log2']: #parameter_max_features == 'sqrt' or parameter_max_features == 'log2':
-            parameter_max_features_metric = parameter_max_features  # Keep track of the metric used
-        else:
-            parameter_max_features_metric = int(parameter_max_features)  # Convert to integer if numeric
+            param_grid = param_grids_xgb_model(parameter_n_estimators, parameter_learning_rate, parameter_max_depth, parameter_min_child_weight, parameter_cosample_bytree, parameter_random_state)
 
-        model.fit(X_train, y_train)
+            mlp_model = {'XGBoost': XGBRegressor()}  
+       
 
-        st.write("Applying model to make predictions ...")
-        time.sleep(sleep_time)
+        model = mlp_gridSearchCV(mlp_model, param_grid, X_train, y_train)
+
+        # st.write("Applying model to make predictions ...")
+        # time.sleep(sleep_time)
         y_train_pred = model.predict(X_train)
         y_test_pred = model.predict(X_test)
             
-        st.write("Calculating performance metrics ...")
-        time.sleep(sleep_time)
+        # st.write("Calculating performance metrics ...")
+        # time.sleep(sleep_time)
 
     def calculate_metrics(row):
         crime_category = row['CrimeCategory']
@@ -483,7 +528,7 @@ if not df_crime_data_db.empty:
     parameters_col = st.columns(3)
     parameters_col[0].metric(label="Data split ratio (% for Training Set)", value=parameter_split_size, delta="")
     parameters_col[1].metric(label="Number of estimators (n_estimators)", value=parameter_n_estimators, delta="")
-    parameters_col[2].metric(label="Max features (max_features)", value=parameter_max_features_metric, delta="")
+    parameters_col[2].metric(label="Max features (max_features)", value=parameter_max_features, delta="")
     #parameters_col[4].metric(label="Min features (min_leaf)", value=parameter_min_samples_leaf, delta="")
         
     importances = model.feature_importances_

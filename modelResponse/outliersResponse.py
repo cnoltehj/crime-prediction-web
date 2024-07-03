@@ -2,7 +2,7 @@ import pandas as pd
 
 def identify_outliers(outliers : pd.DataFrame):
 
-    # try:
+    try:
 
         df = pd.DataFrame(outliers)
 
@@ -32,9 +32,9 @@ def identify_outliers(outliers : pd.DataFrame):
             print("Unexpected data format received from the API")
             return pd.DataFrame()  # Return an empty DataFrame if the data format is unexpected
 
-        #  except:
-        #     print("Unexpected data format received from the API")
-        #     return pd.DataFrame()  # Return an empty DataFrame if the data format is unexpected
+    except:
+        print("Unexpected data format received from the API")
+        return pd.DataFrame()  # Return an empty DataFrame if the data format is unexpected
 
 
 def replace_outliers(outliers : pd.DataFrame):
