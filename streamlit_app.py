@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import (
     train_test_split , 
     GridSearchCV
@@ -21,19 +22,26 @@ from dataRequest.crimedbRequest import (
     fetch_provinces_data, 
     fetch_policestation_data
     )
-from modelResponse.paramgridsResponse import (
-    param_grids_rfm_model, 
-    param_grids_ann_model,  
-    param_grids_knn_model, 
-    param_grids_svr_model, 
-    param_grids_xgb_model,
-    param_grids_all_models
+from modelResponse.hyperparametersResponse import (
+    hyperparameter_rfm_model, 
+    hyperparameter_ann_model,  
+    hyperparameter_knn_model, 
+    hyperparameter_svr_model, 
+    hyperparameter_xgb_model
     )
+from modelResponse.paramgridsResponse import (
+    param_grids_knn_model,
+    param_grids_ann_model,
+    param_grids_rfm_model,
+    param_grids_svr_model,
+    param_grids_xgb_model
+    
+)
 from modelResponse.outliersResponse import (
     identify_outliers, 
     replace_outliers
     )
-from modelResponse.hyperparametersResponse import mlp_gridSearchCV
+from modelResponse.gridsearchcvResponse import mlp_gridSearchCV
 from shapleyPostHocResponse.shapleyPostHocResopnse import display_shap_plots
 from sklearn.metrics import ( 
     mean_absolute_error as meanae, 
@@ -63,9 +71,9 @@ model_results_list = []
 
 st.set_page_config(page_title='ML Model Building', page_icon='🤖', layout='wide')
 
-st.title('Interpretable Regression ML Model Builder')
+st.title('Interpretable Crime Regression ML Model Builder')
 
-with st.expander('About this app'):
+with st.expander('About this application'):
     st.markdown('**What can this app do?**')
     st.info('This app allows users to build a machine learning (ML) model in an end-to-end workflow. Particularly, this encompasses data upload, data pre-processing, ML model building and post-model analysis.')
 
@@ -74,7 +82,7 @@ with st.expander('About this app'):
 
     st.markdown('**Under the hood**')
     st.markdown('Data sets:')
-    st.code('''- Drug solubility data set
+    st.code('''- SAPS statistics online dataset from their website (SAPS, 2023)
     ''', language='markdown')
   
     st.markdown('Libraries used:')
@@ -130,39 +138,41 @@ with st.sidebar:
 
         st.markdown('**1.4. Set Test and Train Parameters**')
         parameter_split_size = st.slider('Data split ratio (% for Training Set)', 10, 90, 80, 5)
-
         
     st.subheader('2. Select Algorithm')
     with st.expander('Algorithms'):
-        algorithm = st.radio('', options=['All' ,'ANN (MLPRegressor)', 'KNN', 'RFM', 'SVR','XGBoost'], index=0)
+        algorithm = st.radio('', options=['ANN (MLPRegressor)', 'KNN', 'RFM', 'SVR','XGBoost'], index=2)
 
     st.subheader('3. Learning Parameters')
     with st.expander('See parameters', expanded=False):
-            if algorithm in ['All', 'RFM' , 'XGBoost']:
-                parameter_n_estimators = st.slider('Number of estimators (n_estimators)', 10, 50,  100)  #1000
+            if algorithm in ['RFM' , 'XGBoost']:
+                parameter_n_estimators = st.slider('Number of estimators (n_estimators)', 10, 50, 100)  #1000
+                            
+                st.write('parameter_n_estimators')
 
-            if algorithm in ['All','RFM']:
-                parameter_max_features = st.select_slider('Max features (max_features)', options=['auto','sqrt', 'log2']) 
+            if algorithm == 'RFM':
+                parameter_max_features = st.select_slider('Max features (max_features)', options=['sqrt', 'log2']) 
                 parameter_min_samples_split = st.slider('Minimum number of samples required to split an internal node (min_samples_split)', 1, 2, 5, 10)
                 parameter_min_samples_leaf = st.slider('Minimum number of samples required to be at a leaf node (min_samples_leaf)', 1, 10, 2, 1)
-            
-            elif algorithm in ['All', 'ANN (MLPRegressor)']:
+                
+            elif algorithm == 'ANN (MLPRegressor)':
                 parameter_hidden_layer_size = st.select_slider('Hidden layers size is the  number of neorons in each hidden layer (hidden_layer_size)', options=[(50, 50), (100,)]) 
-                parameter_activation = st.select_slider('Activation function for the hidden layer (activation)', options=['tanh', 'relu']) 
                 parameter_solver = st.select_slider('Solver for weight optimization (solver) ', options=['adam', 'sgd']) 
-            elif algorithm in ['All','KNN']:
-                parameter_n_neighbors = st.select_slider('Number of neighbors to use (n_neighbors ) ', options=[3, 5, 7]) 
+                parameter_activation = st.select_slider('Activation function for the hidden layer (activation)', options=['tanh', 'relu']) 
+            elif algorithm == 'KNN':
+                parameter_n_neighbors = st.select_slider('Number of neighbors to use (n_neighbors )', options= [3, 5, 7]) 
                 parameter_weights = st.select_slider('Weight function used in prediction (weights)', options=['uniform', 'distance']) 
-            elif algorithm in ['All','SVR']:
+            elif algorithm == 'SVR':
                 parameter_kernel = st.select_slider('Specifies the kernel type to be (kernel)', options=['linear', 'rbf'])  
                 parameter_C = st.select_slider('Regularization parameter (C)', options=[1,10]) 
                 parameter_epsilon = st.select_slider('Epsilon in the epsilon-SVR (epsilon)', options=[0.1 , 0.2]) 
-            elif algorithm in ['All', 'XGBoost']:
+            elif algorithm == 'XGBoost':
                 parameter_learning_rate = st.select_slider('Boosting learning rate (learning_rate)', options=[0.01, 0.1]) 
                 parameter_max_depth = st.select_slider('Maximum depth of a tree (max_depth)', options=[3,5,7]) 
                 parameter_min_child_weight = st.select_slider('Minimum sum of instance weight (hessian) needed in a child (min_child_weight)', options=[1,3]) 
                 parameter_subsample = st.select_slider('Subsample ratio of the training instances (subsample)', options=[0.8, 1.0]) 
                 parameter_cosample_bytree = st.select_slider('Subsample ratio of columns when constructing each tree (cosample_bytree)', options=[0.8, 1.0]) 
+
 
     if algorithm in ['RFM' , 'XGBoost']:
         st.subheader('4. General Parameters')
@@ -174,8 +184,9 @@ with st.sidebar:
                 parameter_criterion = st.select_slider('Performance measure (criterion)', options=['squared_error', 'absolute_error', 'friedman_mse', 'poisson'])
                 parameter_bootstrap = st.select_slider('Bootstrap samples when building trees (bootstrap)', options=[True, False])
                 parameter_oob_score = st.select_slider('Whether to use out-of-bag samples to estimate the R^2 on unseen data (oob_score)', options=[False, True])
-        
-    
+                st.write(parameter_criterion)
+                print(parameter_criterion)
+                
     sleep_time = st.slider('Sleep time', 0, 3, 0)
 
 if not df_crime_data_db.empty: 
@@ -206,6 +217,13 @@ if not df_crime_data_db.empty:
         X_train, X_test, y_train, y_test, crime_category_train, crime_category_test = train_test_split(
         X, y, crime_category, test_size=(100-parameter_split_size)/100, random_state= 42)
 
+        # Initialize the MinMaxScaler
+        scaler = MinMaxScaler()
+
+        # Fit the scaler on the training data and transform both training and testing data
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_test_scaled = scaler.transform(X_test)
+
         # Reset indices to ensure proper alignment
         crime_category_train = crime_category_train.reset_index(drop=True)
         crime_category_test = crime_category_test.reset_index(drop=True)
@@ -217,9 +235,14 @@ if not df_crime_data_db.empty:
         X_train_display.insert(0, 'CrimeCategory', crime_category_train)  # Insert as the first column
         X_test_display = X_test.copy()
         X_test_display.insert(0, 'CrimeCategory', crime_category_test)  # Insert as the first column
+  
+        # if parameter_criterion == 'squared_error':
+        #     parameter_criterion_string = 'MSE'
+        # else:
+        #     parameter_criterion_string = 'MAE'
 
         if algorithm == 'All':
-            param_grid = param_grids_all_models()
+            # param_grid = param_grids_all_models()
 
             # Define the models
             mlp_model = {
@@ -231,43 +254,52 @@ if not df_crime_data_db.empty:
                     }  
 
         elif algorithm == 'ANN (MLPRegressor)':
+            # param_grid = param_grids_ann_model(parameter_hidden_layer_size,parameter_activation,parameter_solver)
+            # mlp_model = {'ANN (MLPRegressor)': MLPRegressor()}
+
             param_grid = param_grids_ann_model(parameter_hidden_layer_size,parameter_activation,parameter_solver)
-
-            mlp_model = {'ANN (MLPRegressor)': MLPRegressor()}
-
+            mlp_model = MLPRegressor()
+            mlp_model = hyperparameter_ann_model(parameter_hidden_layer_size,parameter_activation,parameter_solver)
+        
         elif algorithm == 'KNN':
-            param_grid = param_grids_knn_model(parameter_n_neighbors, parameter_weights)
+            # param_grid = param_grids_knn_model(parameter_n_neighbors, parameter_weights)
+            # mlp_model = {'KNN': KNeighborsRegressor()}  
 
-            mlp_model = {'KNN': KNeighborsRegressor()}  
+            param_grid = param_grids_knn_model(parameter_n_neighbors, parameter_weights)
+            mlp_model = KNeighborsRegressor()
+            mlp_model = hyperparameter_knn_model(parameter_n_neighbors, parameter_weights)
 
         elif algorithm == 'RFM':
+            # param_grid = param_grids_rfm_model(parameter_n_estimators, parameter_max_features, parameter_min_samples_split, parameter_min_samples_leaf, parameter_random_state, parameter_criterion, parameter_bootstrap, parameter_oob_score)
+            # mlp_model = {'RFM': RandomForestRegressor()}
+
             param_grid = param_grids_rfm_model(parameter_n_estimators, parameter_max_features, parameter_min_samples_split, parameter_min_samples_leaf, parameter_random_state, parameter_criterion, parameter_bootstrap, parameter_oob_score)
-
-            mlp_model = {'RFM': RandomForestRegressor()}
-
+            mlp_model = RandomForestRegressor()
+            mlp_model = hyperparameter_rfm_model(parameter_n_estimators, parameter_max_features, parameter_min_samples_split, parameter_min_samples_leaf, parameter_random_state, parameter_criterion, parameter_bootstrap, parameter_oob_score)
+            
         elif algorithm == 'SVR':
+            # param_grid = param_grids_svr_model(parameter_kernel, parameter_C, parameter_epsilon)
+            # mlp_model = {'SVR': SVR()}  
             param_grid = param_grids_svr_model(parameter_kernel, parameter_C, parameter_epsilon)
+            mlp_model = SVR()
+            mlp_model = hyperparameter_svr_model(parameter_kernel, parameter_C, parameter_epsilon)
 
-            mlp_model = {
-                    'ANN (MLPRegressor)': MLPRegressor(),
-                    'KNN': KNeighborsRegressor(),
-                    'RFM': RandomForestRegressor(),
-                    'SVR': SVR(),
-                    'XGBoost': XGBRegressor()
-                    }  
         elif algorithm == 'XGBoost':
+            # param_grid = param_grids_xgb_model(parameter_n_estimators, parameter_learning_rate, parameter_max_depth, parameter_min_child_weight, parameter_cosample_bytree, parameter_random_state)
+            # mlp_model = {'XGBoost': XGBRegressor()} 
 
             param_grid = param_grids_xgb_model(parameter_n_estimators, parameter_learning_rate, parameter_max_depth, parameter_min_child_weight, parameter_cosample_bytree, parameter_random_state)
+            mlp_model = XGBRegressor()
+            mlp_model = hyperparameter_xgb_model(parameter_n_estimators, parameter_learning_rate, parameter_max_depth, parameter_min_child_weight, parameter_cosample_bytree, parameter_random_state)
+      
+        #param_grid = get_param_grid(mlp_model)
 
-            mlp_model = {'XGBoost': XGBRegressor()}  
-       
-
-        model = mlp_gridSearchCV(mlp_model, param_grid, X_train, y_train)
+        model = mlp_gridSearchCV(mlp_model,param_grid, X_train_scaled, y_train)
 
         # st.write("Applying model to make predictions ...")
         # time.sleep(sleep_time)
-        y_train_pred = model.predict(X_train)
-        y_test_pred = model.predict(X_test)
+        y_train_pred = model.predict(X_train_scaled)  #X_train
+        y_test_pred = model.predict(X_test_scaled) #X_test
             
         # st.write("Calculating performance metrics ...")
         # time.sleep(sleep_time)
@@ -309,10 +341,6 @@ if not df_crime_data_db.empty:
             'Test MAPE': mape_test
             })
             
-    if parameter_criterion == 'squared_error':
-            parameter_criterion_string = 'MSE'
-    else:
-        parameter_criterion_string = 'MAE'
 
         # Apply the function to each row of df_crime_data_db and create model_results DataFrame
     model_results = df_crime_data_db.apply(calculate_metrics, axis=1)
@@ -505,51 +533,68 @@ if not df_crime_data_db.empty:
             st.markdown('**y**')
             st.dataframe(y_test, height=210, hide_index=True, use_container_width=True)
 
-    df_crime_data_db.to_csv('dataset.csv', index=False)
-    X_train.to_csv('X_train.csv', index=False)
-    y_train.to_csv('y_train.csv', index=False)
-    X_test.to_csv('X_test.csv', index=False)
-    y_test.to_csv('y_test.csv', index=False)
+    # df_crime_data_db.to_csv('dataset.csv', index=False)
+    # X_train_scaled.to_csv('X_train.csv', index=False)
+    # y_train.to_csv('y_train.csv', index=False)
+    # X_test.to_csv('X_test.csv', index=False)
+    # y_test.to_csv('y_test.csv', index=False)
         
-    list_files = ['dataset.csv', 'X_train.csv', 'y_train.csv', 'X_test.csv', 'y_test.csv']
-    with zipfile.ZipFile('dataset.zip', 'w') as zipF:
-        for file in list_files:
-            zipF.write(file, compress_type=zipfile.ZIP_DEFLATED)
+    # list_files = ['dataset.csv', 'X_train.csv', 'y_train.csv', 'X_test.csv', 'y_test.csv']
+    # with zipfile.ZipFile('dataset.zip', 'w') as zipF:
+    #     for file in list_files:
+    #         zipF.write(file, compress_type=zipfile.ZIP_DEFLATED)
 
-    with open('dataset.zip', 'rb') as datazip:
-        btn = st.download_button(
-                label='Download ZIP',
-                data=datazip,
-                file_name="dataset.zip",
-                mime="application/octet-stream"
-                )
+    # with open('dataset.zip', 'rb') as datazip:
+    #     btn = st.download_button(
+    #             label='Download ZIP',
+    #             data=datazip,
+    #             file_name="dataset.zip",
+    #             mime="application/octet-stream"
+    #             )
         
     st.header(f'{algorithm} model parameters', divider='rainbow')
-    parameters_col = st.columns(3)
-    parameters_col[0].metric(label="Data split ratio (% for Training Set)", value=parameter_split_size, delta="")
-    parameters_col[1].metric(label="Number of estimators (n_estimators)", value=parameter_n_estimators, delta="")
-    parameters_col[2].metric(label="Max features (max_features)", value=parameter_max_features, delta="")
-    #parameters_col[4].metric(label="Min features (min_leaf)", value=parameter_min_samples_leaf, delta="")
-        
-    importances = model.feature_importances_
-    feature_names = list(X.columns)
-    forest_importances = pd.Series(importances, index=feature_names)
-    df_importance = forest_importances.reset_index().rename(columns={'index': 'feature', 0: 'value'})
-        
-    bars = alt.Chart(df_importance).mark_bar(size=40).encode(
-            x='value:Q',
-            y=alt.Y('feature:N', sort='-x')
-        ).properties(height=250)
+    if algorithm == 'RFM':
+        parameters_col = st.columns(3)
+        parameters_col[0].metric(label="Data split ratio (% for Training Set)", value=parameter_split_size, delta="")
+        parameters_col[1].metric(label="Number of estimators (n_estimators)", value=parameter_n_estimators, delta="")
+        parameters_col[2].metric(label="Max features (max_features)", value=parameter_max_features, delta="")
+    elif algorithm == 'SVR' :
+        parameters_col = st.columns(3)
+        parameters_col[0].metric(label="Data split ratio (% for Training Set)", value=parameter_split_size, delta="")
+    else:
+        if algorithm != 'XGBoost':
+            parameters_col = st.columns(3)
+            parameters_col[0].metric(label="Data split ratio (% for Training Set)", value=parameter_split_size, delta="")
 
-    performance_col = st.columns((2, 0.2, 3))
+            if algorithm != 'ANN (MLPRegressor)':
+                parameters_col[1].metric(label="Number of estimators (n_estimators)", value=parameter_n_estimators, delta="")
+        else:
+            parameters_col = st.columns(3)
+            parameters_col[0].metric(label="Data split ratio (% for Training Set)", value=parameter_split_size, delta="")
 
-    with performance_col[0]:
-        st.header('Model performance', divider='rainbow')
-        #st.write('Model performance to be edited for now it is hidden')
-        st.dataframe(model_results.T.reset_index().rename(columns={'index': 'Parameter', 0: 'Value'}))
-    with performance_col[2]:
-        st.header('Feature importance', divider='rainbow')
-        st.altair_chart(bars, theme='streamlit', use_container_width=True)
+
+    if algorithm != 'SVR' :   
+        if algorithm !='ANN (MLPRegressor)':
+            importances = model.feature_importances_
+
+            feature_names = list(X.columns)
+            forest_importances = pd.Series(importances, index=feature_names)
+            df_importance = forest_importances.reset_index().rename(columns={'index': 'feature', 0: 'value'})
+        
+            bars = alt.Chart(df_importance).mark_bar(size=40).encode(
+                    x='value:Q',
+                    y=alt.Y('feature:N', sort='-x')
+                ).properties(height=250)
+
+            performance_col = st.columns((2, 0.2, 3))
+
+            with performance_col[0]:
+                st.header('Model performance', divider='rainbow')
+                #st.write('Model performance to be edited for now it is hidden')
+                st.dataframe(model_results.T.reset_index().rename(columns={'index': 'Parameter', 0: 'Value'}))
+            with performance_col[2]:
+                st.header('Feature importance', divider='rainbow')
+                st.altair_chart(bars, theme='streamlit', use_container_width=True)
 
     st.header(f'{algorithm} prediction results', divider='rainbow')
     s_y_train = pd.Series(y_train, name='True Trained').reset_index(drop=True)
@@ -587,6 +632,7 @@ scatter = alt.Chart(df_prediction).mark_circle(size=60).encode(
 st.altair_chart(scatter, theme='streamlit', use_container_width=True)
 st.header(f'{algorithm} Shapley values', divider='rainbow')
 with st.expander('Shapley values'):
-    display_shap_plots(model, X_train,X_test)
+    display_shap_plots(model, X_train,X_test) 
+    #display_shap_plots(model, X_train_scaled,X_test_scaled)
 # else:
 #     st.warning('👈 Upload a CSV file or click *"Load example data"* to get started!')

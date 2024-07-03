@@ -1,20 +1,65 @@
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.neural_network import MLPRegressor
+from sklearn.svm import SVR
+from xgboost import XGBRegressor
 
-from sklearn.model_selection import train_test_split , GridSearchCV
+def hyperparameter_knn_model(parameter_n_neighbors, parameter_weights) :
+  
+        model = KNeighborsRegressor(
+                n_neighbors = parameter_n_neighbors, 
+                weights = parameter_weights
+        )
 
+        return model
 
-def mlp_gridSearchCV(mlp_model, param_grid_value, X_train, y_train):
-    scoring_value = 'neg_mean_squared_error'
-    cv_value = 3
-    best_estimators = {}  # Initialize the dictionary to store best models
+def hyperparameter_rfm_model(parameter_n_estimators, parameter_max_features, parameter_min_samples_split, parameter_min_samples_leaf, parameter_random_state, parameter_criterion, parameter_bootstrap, parameter_oob_score):
+    
+        model = RandomForestRegressor(
+                n_estimators=parameter_n_estimators,
+                max_features=parameter_max_features,
+                min_samples_split=parameter_min_samples_split,
+                min_samples_leaf=parameter_min_samples_leaf,
+                random_state=parameter_random_state,
+                criterion=parameter_criterion,
+                bootstrap=parameter_bootstrap,
+                oob_score=parameter_oob_score
+                )
 
-    for model_name, model in mlp_model.items():
-        param_grid = param_grid_value[model_name]
-        grid_search_model = GridSearchCV(estimator=model, param_grid=param_grid, scoring=scoring_value, cv=cv_value)
-        grid_search_model.fit(X_train, y_train)
+        return model
 
-        # Get the best model from GridSearchCV
-        best_estimators[model_name] = grid_search_model.best_estimator_
+def hyperparameter_svr_model(parameter_kernel, parameter_C, parameter_epsilon) :
 
-    # Return the dictionary containing the best models
-    return best_estimators  
+        model = SVR(
+                kernel = parameter_kernel, 
+                C = parameter_C, 
+                epsilon = parameter_epsilon
+                )
+
+        return model
+
+def hyperparameter_xgb_model(parameter_n_estimators, parameter_learning_rate, parameter_max_depth, parameter_min_child_weight, parameter_cosample_bytree, parameter_random_state) :
+
+        model = XGBRegressor(
+                n_estimators=parameter_n_estimators,
+                random_state=parameter_random_state,
+                learning_rate = parameter_learning_rate, 
+                max_depth = parameter_max_depth, 
+                min_child_weight = parameter_min_child_weight, 
+                cosample_bytree = parameter_cosample_bytree,
+                feature_name_in = ''
+                )
+            # feature_name_in = ''
+        return model
+
+def hyperparameter_ann_model(parameter_hidden_layer_size,parameter_activation,parameter_solver) :
+  
+        model = MLPRegressor(
+                hidden_layer_sizes= parameter_hidden_layer_size,
+                activation = parameter_activation,
+                solver = parameter_solver
+        )
+
+        return model
+
 

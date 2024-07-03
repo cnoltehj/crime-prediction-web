@@ -3,7 +3,7 @@ from sklearn.neighbors import KNeighborsRegressor
 from sklearn.neural_network import MLPRegressor
 from xgboost import XGBRegressor
 from sklearn.svm import SVR
-from modelResponse import hyperparametersResponse
+from modelResponse import gridsearchcvResponse
 
 
 def param_grids_all_models():
@@ -49,70 +49,50 @@ def param_grids_all_models():
 
 def param_grids_knn_model(parameter_n_neighbors, parameter_weights):
   
-        param_grids = {
-                'ANN (MLPRegressor)': {
-                        'hidden_layer_sizes': parameter_n_neighbors , 
-                        'activation': parameter_weights, 
-                        'solver': ['adam', 'sgd']
-                        }
+        return {
+                'hidden_layer_sizes': [parameter_n_neighbors] , 
+                'activation': [parameter_weights], 
+                'solver': ['adam', 'sgd']
                 }
-
-        return param_grids
 
 def param_grids_rfm_model(parameter_n_estimators, parameter_max_features, parameter_min_samples_split, parameter_min_samples_leaf, parameter_random_state, parameter_criterion, parameter_bootstrap, parameter_oob_score):
     
-        param_grids = {
-                'RFM' : {
-                        'n_estimators': parameter_n_estimators,
-                        'max_features': parameter_max_features,
-                        'min_samples_split': parameter_min_samples_split,
-                        'min_samples_leaf': parameter_min_samples_leaf,
-                        'random_state': parameter_random_state,
-                        'bootstrap': parameter_bootstrap,
-                        'oob_score': parameter_oob_score,
-                       'criterion': parameter_criterion
-                        }
+        return{
+                'n_estimators': [parameter_n_estimators],
+                'max_features': [parameter_max_features],
+                'min_samples_split': [parameter_min_samples_split],
+                'min_samples_leaf': [parameter_min_samples_leaf],
+                'random_state': [parameter_random_state],
+                'bootstrap': [parameter_bootstrap],
+                'oob_score': [parameter_oob_score],
+                'criterion': [parameter_criterion]
                 }
-
-        return param_grids
 
 def param_grids_svr_model(parameter_kernel, parameter_C, parameter_epsilon):
          
-        param_grids = {
-                'SVR':  {
-                        'kernel' : parameter_kernel,
-                        'C' : parameter_C,
-                        'epsilon': parameter_epsilon
-                        }
+        return {
+                'kernel' : [parameter_kernel],
+                'C' : [parameter_C],
+                'epsilon': [parameter_epsilon]
                 }
-
-        return param_grids
 
 def param_grids_xgb_model(parameter_n_estimators, parameter_learning_rate, parameter_max_depth, parameter_min_child_weight, parameter_cosample_bytree, parameter_random_state):
 
-        param_grids = {
-                'XGBoost':{
-                        'n_estimators' : parameter_n_estimators,
-                        'learning_rate' : parameter_learning_rate,
-                        'max_depth' : parameter_max_depth,
-                        'min_child_weight' : parameter_min_child_weight,
-                        'cosample_bytree' : parameter_cosample_bytree,
-                        'random_state' : parameter_random_state
-                        }
+        return {
+                'n_estimators' : [parameter_n_estimators],
+                'learning_rate' : [parameter_learning_rate],
+                'max_depth' : [parameter_max_depth],
+                'min_child_weight' : [parameter_min_child_weight],
+                'cosample_bytree' : [parameter_cosample_bytree],
+                'random_state' : [parameter_random_state]
                 }
-
-        return param_grids
 
 def param_grids_ann_model(parameter_hidden_layer_size,parameter_activation,parameter_solver):
   
-        param_grids = {
-                'ANN' : {
-                'hidden_layer_sizes': parameter_hidden_layer_size,
-                'activation' : parameter_activation,
-                'solver' : parameter_solver
-                        }
+        return  {
+                'hidden_layer_sizes': [parameter_hidden_layer_size],
+                'activation' : [parameter_activation],
+                'solver' : [parameter_solver]
                 }
-
-        return param_grids
 
       
