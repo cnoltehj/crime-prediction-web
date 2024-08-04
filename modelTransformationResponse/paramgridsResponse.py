@@ -3,7 +3,7 @@ from sklearn.neighbors import KNeighborsRegressor
 from sklearn.neural_network import MLPRegressor
 from xgboost import XGBRegressor
 from sklearn.svm import SVR
-from modelResponse import gridsearchcvResponse
+from modelTransformationResponse import gridsearchcvResponse
 
 
 def param_grids_all_models():
