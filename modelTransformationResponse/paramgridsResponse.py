@@ -5,7 +5,6 @@ from xgboost import XGBRegressor
 from sklearn.svm import SVR
 from modelTransformationResponse import gridsearchcvResponse
 
-
 def param_grids_all_models():
 
         param_grids = {
@@ -46,7 +45,6 @@ def param_grids_all_models():
         
         return param_grids
         
-
 def param_grids_knn_model(parameter_n_neighbors, parameter_weights):
   
         return {
@@ -76,14 +74,14 @@ def param_grids_svr_model(parameter_kernel, parameter_C, parameter_epsilon):
                 'epsilon': [parameter_epsilon]
                 }
 
-def param_grids_xgb_model(parameter_n_estimators, parameter_learning_rate, parameter_max_depth, parameter_min_child_weight, parameter_cosample_bytree, parameter_random_state):
+def param_grids_xgb_model(parameter_n_estimators, parameter_learning_rate, parameter_max_depth, parameter_min_child_weight, parameter_subsample_bytree, parameter_random_state):
 
         return {
                 'n_estimators' : [parameter_n_estimators],
                 'learning_rate' : [parameter_learning_rate],
                 'max_depth' : [parameter_max_depth],
                 'min_child_weight' : [parameter_min_child_weight],
-                'cosample_bytree' : [parameter_cosample_bytree],
+                'subsample_bytree' : [parameter_subsample_bytree],
                 'random_state' : [parameter_random_state]
                 }
 
@@ -95,4 +93,3 @@ def param_grids_ann_model(parameter_hidden_layer_size,parameter_activation,param
                 'solver' : [parameter_solver]
                 }
 
-      

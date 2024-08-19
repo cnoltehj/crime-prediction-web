@@ -38,7 +38,7 @@ def hyperparameter_svr_model(parameter_kernel, parameter_C, parameter_epsilon) :
 
         return model
 
-def hyperparameter_xgb_model(parameter_n_estimators, parameter_learning_rate, parameter_max_depth, parameter_min_child_weight, parameter_cosample_bytree, parameter_random_state) :
+def hyperparameter_xgb_model(parameter_n_estimators, parameter_learning_rate, parameter_max_depth, parameter_min_child_weight, parameter_subsample_bytree, parameter_random_state) :
 
         model = XGBRegressor(
                 n_estimators=parameter_n_estimators,
@@ -46,10 +46,9 @@ def hyperparameter_xgb_model(parameter_n_estimators, parameter_learning_rate, pa
                 learning_rate = parameter_learning_rate, 
                 max_depth = parameter_max_depth, 
                 min_child_weight = parameter_min_child_weight, 
-                cosample_bytree = parameter_cosample_bytree,
+                subsample_bytree = parameter_subsample_bytree,
                 feature_name_in = ''
                 )
-            # feature_name_in = ''
         return model
 
 def hyperparameter_ann_model(parameter_hidden_layer_size,parameter_activation,parameter_solver) :
