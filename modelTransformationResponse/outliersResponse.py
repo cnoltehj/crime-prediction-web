@@ -60,7 +60,7 @@ def replace_outliers_data(outliers: pd.DataFrame) -> pd.DataFrame:
                 outlier_mask = (percentages < (Q1 - 1.5 * IQR)) | (percentages > (Q3 + 1.5 * IQR))
                 
                 # Calculate the mean of non-outlier values
-                mean_value = percentages[~outlier_mask].mean()
+                mean_value = percentages[~outlier_mask].median()
                 
                 # Replace outliers with the mean value
                 row[percentage_columns] = percentages.where(~outlier_mask, mean_value)
