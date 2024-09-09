@@ -529,9 +529,6 @@ with TransformTab3:
     X_test_display.insert(2, 'PoliceStationCode', police_station_code_test)
     X_test_display.insert(3, 'Quarter', quarter_test)
 
-    st.write()
-
-
     # G - Train dataset Encoding Scenarios and Predictions =========
 
     # Scenario 1 - Train: Label encoding for 'PoliceStationCode' and 'Quarter'
@@ -568,19 +565,81 @@ with TransformTab3:
       # Before fitting the model, ensure that X_train_scaled and y_train_scaled are of the same length
     assert len(X_train_scaled) == len(y_train_scaled), "Mismatch in the length of X_train_scaled and y_train_scaled"
 
+   # Initialize dictionaries to store predictions and metrics for each category
+    predictions_per_category = {}
+    metrics_per_category = {}
+
+
+    print("Df_Replace_Outliers")
+    print(df_replace_outliers)
+    print("X Train Scaled DF")
+    print(X_train_scaled_df)
+    print("Y Train")
+    print(y_train)
+
+    print("X Test Scaled DF")
+    print(X_test_scaled_df)
+    print("Y Test")
+    print(y_test)
+
+  
+# Iterate over each unique CrimeCategory in the dataset
+for category in df_replace_outliers['CrimeCategory'].unique():
+    print(f"Processing CrimeCategory: {category}")
+    
+    # Filter the dataset for the current category
+    X_category = X_train_scaled_df[df_replace_outliers['CrimeCategory'] == category]
+    
+    # Drop the specified columns if they exist in the DataFrame
+    columns_to_drop = ['CrimeCategory', 'ProvinceCode', 'PoliceStationCode', 'Quarter']
+    X_category = X_category.drop(columns=[col for col in columns_to_drop if col in X_category.columns])
+    
+    # Filter the target variable
+    y_category = y_train[df_replace_outliers['CrimeCategory'] == category]
+
+    
+    # Check if the lengths of X_category and y_category are consistent
+    if len(X_category) != len(y_category):
+        print(f"Skipping category {category} due to inconsistent sample sizes.")
+        continue
+    
+    # Check if there's enough data to train the model
+    if len(X_category) < 2 or len(y_category) < 2:
+        print(f"Skipping category {category} due to insufficient data.")
+        continue
+    
+    # Initialize dictionaries to store results for the current category
+    predictions_scenario_1_category = {}
+    metrics_scenario_1_category = {}
+    
     # Iterate over each model, perform GridSearchCV, and make predictions
     for name, model in models.items():
-        print(f"Training and predicting with {name}...")
+        print(f"Training and predicting with {name} for {category}...")
+
+         # For KNeighborsRegressor, adjust n_neighbors based on the available samples
+        if name == 'KNNR':
+            n_samples_fit = len(X_category)
+            if n_samples_fit < 5:  # If fewer than 5 samples, adjust n_neighbors to n_samples_fit
+                params['KNNR']['n_neighbors'] = [n_samples_fit]
         
         # Perform GridSearchCV to find the best parameters
-        grid_search = GridSearchCV(estimator=model, param_grid=params[name], cv=5, n_jobs=-1, scoring='r2')
-        grid_search.fit(X_train_scaled, y_train_scaled)
+        grid_search = GridSearchCV(estimator=model, param_grid=params[name], cv=2, n_jobs=-1, scoring='r2')
+        grid_search.fit(X_category, y_category)
         
         # Store the best model
         best_models_scenario_1[name] = grid_search.best_estimator_
+
+        # Prepare X_test_scaled for prediction by excluding the categorical columns
+        columns_to_drop = ['CrimeCategory', 'ProvinceCode', 'PoliceStationCode', 'Quarter']
+
+        # Prepare X_test_scaled for prediction by excluding the categorical columns
+        # Only drop columns if they exist in X_test_scaled_df
+        X_test_scaled_filtered = X_test_scaled_df.drop(columns=[col for col in columns_to_drop if col in X_test_scaled_df.columns])
+
+        # X_test_scaled_filtered = X_test_scaled_df.drop(['CrimeCategory', 'ProvinceCode', 'PoliceStationCode', 'Quarter'], axis=1)
         
         # Make predictions on the test set
-        y_pred = grid_search.predict(X_test_scaled)
+        y_pred = grid_search.predict(X_test_scaled_filtered)
         predictions_scenario_1[name] = y_pred
         
         # Calculate evaluation metrics
@@ -604,6 +663,12 @@ with TransformTab3:
         print(f"  R²: {r2_scenario_1}")
         print(f"  RMSE: {rmse_scenario_1}")
         print("\n" + "-"*50 + "\n")
+
+    
+    # Store predictions and metrics for the current category
+    predictions_per_category[category] = predictions_scenario_1_category
+    metrics_per_category[category] = metrics_scenario_1_category
+
 
     # Scenario 2 Train: One-hot encoding for 'PoliceStationCode' and 'Quarter'
 
@@ -633,6 +698,11 @@ with TransformTab3:
     best_models_scenario_2 = {}
     predictions_scenario_2 = {}
 
+
+    # st.write("X_category") 
+    # st.write(X_category) 
+    # st.write("y_category") 
+    # st.write(y_category) 
     # st.write("y_train_display") 
     # st.write(y_test) 
     # st.write("X_train_display") 
@@ -700,10 +770,25 @@ with TransformTab3:
     encoded_qtr_df_test = pd.DataFrame(encoded_qtr_test, columns=onehot_encoder_train.get_feature_names_out(['Quarter']))
     data_label_onehot_encoded_test = pd.concat([data_label_onehot_encoded_test, encoded_qtr_df_test], axis=1).drop(['Quarter'], axis=1)
 
+    # # Select only numerical columns
+    # numerical_columns_train = data_label_onehot_encoded_train.select_dtypes(include=['float64', 'int64']).columns
+    # data_label_onehot_encoded_train = data_label_onehot_encoded_train[numerical_columns_train]
+    # data_label_onehot_encoded_test = data_label_onehot_encoded_test[numerical_columns_train]
+
     # Select only numerical columns
     numerical_columns_train = data_label_onehot_encoded_train.select_dtypes(include=['float64', 'int64']).columns
-    data_label_onehot_encoded_train = data_label_onehot_encoded_train[numerical_columns_train]
+
+    # Ensure the test set has the same columns as the train set
+    missing_cols = set(numerical_columns_train) - set(data_label_onehot_encoded_test.columns)
+    for col in missing_cols:
+        data_label_onehot_encoded_test[col] = 0
+
+    # Reorder columns in the test set to match the train set
     data_label_onehot_encoded_test = data_label_onehot_encoded_test[numerical_columns_train]
+
+    # Now you can safely subset the train and test DataFrames
+    data_label_onehot_encoded_train = data_label_onehot_encoded_train[numerical_columns_train]
+
 
     # Apply StandardScaler
     scaler = StandardScaler()
