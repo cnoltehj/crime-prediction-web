@@ -396,12 +396,12 @@ with Transformationtab6:
 
     # Define the parameters grid for each model (these are examples, you can customize them)
     params = {
-        'RFM': {'n_estimators': [100, 200], 'max_depth': [None, 10, 20]},
-        'SVR': {'C': [1, 10], 'kernel': ['linear', 'rbf']},
-        'XGBR': {'n_estimators': [100, 200], 'learning_rate': [0.01, 0.1]},
-        'KNNR': {'n_neighbors': [5, 10], 'weights': ['uniform', 'distance']},
-        'MLPR': {'hidden_layer_sizes': [(100,), (100, 50)], 'activation': ['relu', 'tanh']}
-    }
+    'RFM': {'n_estimators': [100, 200], 'max_depth': [None, 10, 20]},
+    'SVR': {'C': [1, 10], 'kernel': ['linear', 'rbf']},
+    'XGBR': {'n_estimators': [100, 200], 'learning_rate': [0.01, 0.1], 'max_depth': [3, 5]},
+    'KNNR': {'n_neighbors': [5, 10], 'weights': ['uniform', 'distance']},
+    'MLPR': {'hidden_layer_sizes': [(100,), (100, 50)], 'activation': ['relu', 'tanh']}
+}
 
     def evaluate_metrics(y_true, y_pred):
         metrics_list = {
@@ -420,821 +420,755 @@ with Transformationtab6:
     cv_value = 3
 
 #==========================
+# A - Keeping dataset in wide format for prediction =====
+# Assuming df_replace_outliers is the original dataset with years as columns
+df_wide = df_replace_outliers.copy()
 
-    # Identify year columns dynamically
-    year_columns = [col for col in df_replace_outliers.columns if col.isdigit() and len(col) == 4]
+# B - Defining feature set X (years 2016-2023) and target y (2024 prediction) =====
+# We exclude 'CrimeCategory', 'ProvinceCode', 'PoliceStationCode', 'Quarter' as these are categorical
+X = df_wide[['2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023']]
+y = df_wide['2023']  # Using 2023 as a proxy for training, predicting 2024
 
-    # C - Splitting the Data =========
+# C - Splitting the dataset into train/test sets (use 2016-2023 data for training) =====
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    # Define the feature set X and target variable y
-    X = df_replace_outliers.drop(columns=['CrimeCategory', 'ProvinceCode', 'PoliceStationCode', 'Quarter'])
-    y = df_replace_outliers[year_columns].median(axis=1)  # Median across all years
+# Ensure X_train and X_test are DataFrames before scaling
+X_train_display = pd.DataFrame(X_train, columns=X.columns)
+X_test_display = pd.DataFrame(X_test, columns=X.columns)
 
-    # Extract the required columns for display
-    crime_category = df_replace_outliers['CrimeCategory']
-    province_code = df_replace_outliers['ProvinceCode']
-    police_station_code = df_replace_outliers['PoliceStationCode']
-    quarter = df_replace_outliers['Quarter']
+# D - Scaling the numeric features ===== Use values for Predicting withou Encoding
+scaler_X = MinMaxScaler()
+X_train_scaled = scaler_X.fit_transform(X_train)
+X_test_scaled = scaler_X.transform(X_test)
 
-    # Split the data into training and testing sets
-    X_train, X_test, y_train, y_test, crime_category_train, crime_category_test, \
-    province_code_train, province_code_test, police_station_code_train, police_station_code_test, \
-    quarter_train, quarter_test = train_test_split(
-        X, y, crime_category, province_code, police_station_code, quarter,
-        test_size=(100 - parameter_split_size) / 100, random_state=42
-    )
+predictions = {}
 
-    # B - Scaling with MinMaxScaler =========
-    # Initialize the MinMaxScaler
-    scaler = MinMaxScaler()
+# Loop through each model and perform GridSearchCV
+for name, model in models.items():
+    print(f"Training {name} model...")
+    
+    # Get the parameter grid for the current model
+    param_grid = params[name]
+    
+    # Define GridSearchCV
+    grid_search = GridSearchCV(model, param_grid, cv=5, scoring='neg_mean_squared_error', n_jobs=-1)
+    
+    # Fit the model using GridSearchCV
+    grid_search.fit(X_train_scaled, y_train)
+    
+    # Retrieve the best estimator (model with best parameters)
+    best_model = grid_search.best_estimator_
+    
+    # Predict on the test set
+    y_pred = best_model.predict(X_test_scaled)
+    
+    # Store predictions and calculate metrics
+    predictions[name] = {
+        'Prediction': y_pred,
+        'True_value': y_test,
+        'MSE': mean_squared_error(y_test, y_pred),
+        'MAE': mean_absolute_error(y_test, y_pred),
+        'R²': r2_score(y_test, y_pred),
+        'MAPE': mean_absolute_percentage_error(y_test, y_pred),
+        'RMSE': np.sqrt(mean_squared_error(y_test, y_pred))
+    }
 
-    # Apply MinMaxScaler to the feature set (X) in both training and testing sets
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
+# F - Merging predictions with original dataset =====
+# Create a DataFrame for the output format
+output_data = df_wide[['CrimeCategory', 'ProvinceCode', 'PoliceStationCode', 'Quarter', '2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023']].copy()
 
-    # Reshape y_train and y_test for scaling
-    y_train_reshaped = y_train.values.reshape(-1, 1)
-    y_test_reshaped = y_test.values.reshape(-1, 1)
+output_mertics = df_wide[['CrimeCategory', 'ProvinceCode', 'PoliceStationCode', 'Quarter', '2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023']].copy()
 
-    # Apply MinMaxScaler to y_train and y_test
-    y_train_scaled = scaler.fit_transform(y_train_reshaped)
-    y_test_scaled = scaler.transform(y_test_reshaped)   
+# Adding predictions and true values for each model
+for name, results in predictions.items():
+    # Adding prediction for 2024 as a new column
+    output_data[f'Prediction_{name}'] = pd.Series(results['Prediction'], index=y_test.index)
+    
+    # Adding true values for 2023 (actual values from the test set)
+    output_data[f'True_value_{name}'] = pd.Series(y_test.values, index=y_test.index)
 
-    # Convert back to 1D arrays (if needed)
-    y_train_scaled = y_train_scaled.flatten()
-    y_test_scaled = y_test_scaled.flatten()
+    output_mertics[f'MSE_{name}'] = pd.Series(results['MSE'], index=y_test.index)
+    
 
-    # Convert the scaled arrays back to dataframes with the same column names as X
-    X_train_scaled_df = pd.DataFrame(X_train_scaled, columns=X_train.columns)
-    X_test_scaled_df = pd.DataFrame(X_test_scaled, columns=X_test.columns)
 
-    # Reset indices for the extracted columns to ensure proper alignment
-    crime_category_train = crime_category_train.reset_index(drop=True)
-    crime_category_test = crime_category_test.reset_index(drop=True)
-    province_code_train = province_code_train.reset_index(drop=True)
-    province_code_test = province_code_test.reset_index(drop=True)
-    police_station_code_train = police_station_code_train.reset_index(drop=True)
-    police_station_code_test = police_station_code_test.reset_index(drop=True)
-    quarter_train = quarter_train.reset_index(drop=True)
-    quarter_test = quarter_test.reset_index(drop=True)
 
-    for name, model in models.items():
+# G - Final output with predictions =====
+# st.write("Final Output with Predictions:")
+# st.dataframe(output_data)
 
-        grid_search_model_train = GridSearchCV(model, params[name], cv=cv_value, scoring='neg_mean_squared_error')
-            #GridSearchCV(estimator=model, param_grid=param_grid, scoring=scoring_value, cv=cv_value,error_score='raise')
-        grid_search_model_train.fit(X_train, y_train_scaled)
-            # Get the best model from GridSearchCV
-        best_model_train = grid_search_model_train.best_estimator_
-
-        grid_search_model_test = GridSearchCV(model, params[name], cv=cv_value, scoring='neg_mean_squared_error')
-            #GridSearchCV(estimator=model, param_grid=param_grid, scoring=scoring_value, cv=cv_value,error_score='raise')
-        grid_search_model_test.fit(X_test, y_test_scaled)
-            # Get the best model from GridSearchCV
-        best_model_test = grid_search_model_train.best_estimator_
-
-    # E -  Prediction and Metrics =========
-
-        for name, model in best_estimators_train.items():
-            y_train_pred = model.predict(X_train)
-
-            print(f'Train Prediction without encoding for {name}: {y_train_pred}')
-        
-            mse = mean_squared_error(y_train_scaled, y_train_pred)
-            mae = mean_absolute_error(y_train_scaled, y_train_pred)
-            r2 = r2_score(y_train_scaled, y_train_pred)
-            mape= mean_absolute_percentage_error(y_train_scaled, y_train_pred)
-            rmse = np.sqrt(mse) 
-
-            metrics[name] = {'MSE': mse, 'MAE': mae, 'R²': r2, 'RMSE': rmse}
-
-            print(f'Metrics Train without encoding  for {name}: {metrics[name]}')
-
-        for name, model in best_estimators_test.items():
-            y_test_pred = model.predict(X_test)
-
-            print(f'Test Prediction without encoding  for {name}: {y_test_pred}')
-        
-            mse = mean_squared_error(y_test_scaled, y_test_pred)
-            mae = mean_absolute_error(y_test_scaled, y_test_pred)
-            r2 = r2_score(y_test_scaled, y_test_pred)
-            mape= mean_absolute_percentage_error(y_test_scaled, y_test_pred)
-            rmse = np.sqrt(mse) 
-
-            metrics[name] = {'MSE': mse, 'MAE': mae, 'R²': r2, 'RMSE': rmse}
-
-            print(f'Metrics Test without encoding for {name}: {metrics[name]}')
-
-    # F - Insert additional columns for display purposes =========
-
-    # Insert additional columns for display purposes
-    X_train_display = X_train_scaled_df.copy()
-    X_train_display.insert(0, 'CrimeCategory', crime_category_train)
-    X_train_display.insert(1, 'ProvinceCode', province_code_train)
-    X_train_display.insert(2, 'PoliceStationCode', police_station_code_train)
-    X_train_display.insert(3, 'Quarter', quarter_train)
-
-    X_test_display = X_test_scaled_df.copy()
-    X_test_display.insert(0, 'CrimeCategory', crime_category_test)
-    X_test_display.insert(1, 'ProvinceCode', province_code_test)
-    X_test_display.insert(2, 'PoliceStationCode', police_station_code_test)
-    X_test_display.insert(3, 'Quarter', quarter_test)
-
-    X_train_categories = X_train_display[['CrimeCategory', 'ProvinceCode', 'PoliceStationCode', 'Quarter']].copy()
-    X_test_categories = X_test_display[['CrimeCategory', 'ProvinceCode', 'PoliceStationCode', 'Quarter']].copy()
 
 #++++++++++++++++++++++++++
 #+++++++++++++++++++++++++
 # Scenario 1: Label encoding for 'PoliceStationCode' and 'Quarter' - Training and Prediction
 
-# Initialize Label Encoders for 'PoliceStationCode' and 'Quarter'
-label_encoder_psc_train_1 = LabelEncoder()
-label_encoder_qtr_train_1 = LabelEncoder()
+# Initialize Label Encoders for categorical variables
+label_encoder_psc = LabelEncoder()
+label_encoder_qtr = LabelEncoder()
 
-# Copy the training and test data for encoding
-data_label_encoded_train_1 = X_train_display.copy()
-data_label_encoded_test_1 = X_test_display.copy()
+# Copy data for encoding
+X_train_encoded = X_train_display.copy()
+X_test_encoded = X_test_display.copy()
 
-# Encode 'PoliceStationCode' and 'Quarter' in the training set
-data_label_encoded_train_1['PoliceStationCode'] = label_encoder_psc_train_1.fit_transform(data_label_encoded_train_1['PoliceStationCode'])
-data_label_encoded_train_1['Quarter'] = label_encoder_qtr_train_1.fit_transform(data_label_encoded_train_1['Quarter'])
+# Check if 'PoliceStationCode' and 'Quarter' exist in both train and test sets before encoding
+if 'PoliceStationCode' in X_train_encoded.columns and 'PoliceStationCode' in X_test_encoded.columns:
+    X_train_encoded['PoliceStationCode'] = label_encoder_psc.fit_transform(X_train_encoded['PoliceStationCode'])
+    X_test_encoded['PoliceStationCode'] = label_encoder_psc.transform(X_test_encoded['PoliceStationCode'])
+else:
+    print("Warning: 'PoliceStationCode' column is missing from the dataset.")
 
-# Apply the same encoding to the test set
-data_label_encoded_test_1['PoliceStationCode'] = label_encoder_psc_train_1.transform(data_label_encoded_test_1['PoliceStationCode'])
-data_label_encoded_test_1['Quarter'] = label_encoder_qtr_train_1.transform(data_label_encoded_test_1['Quarter'])
+if 'Quarter' in X_train_encoded.columns and 'Quarter' in X_test_encoded.columns:
+    X_train_encoded['Quarter'] = label_encoder_qtr.fit_transform(X_train_encoded['Quarter'])
+    X_test_encoded['Quarter'] = label_encoder_qtr.transform(X_test_encoded['Quarter'])
+else:
+    print("Warning: 'Quarter' column is missing from the dataset.")
 
 # Select only numerical columns for scaling
-numerical_columns = data_label_encoded_train_1.select_dtypes(include=[np.number]).columns
-X_train_numerical_1 = data_label_encoded_train_1[numerical_columns]
-X_test_numerical_1 = data_label_encoded_test_1[numerical_columns]
+numerical_columns = X_train_encoded.select_dtypes(include=[np.number]).columns
+X_train_numerical = X_train_encoded[numerical_columns]
+X_test_numerical = X_test_encoded[numerical_columns]
 
-# Apply StandardScaler to numerical data
-scaler_X_1 = StandardScaler()
-X_train_scaled_1 = scaler_X_1.fit_transform(X_train_numerical_1)
-X_test_scaled_1 = scaler_X_1.transform(X_test_numerical_1)
+# Apply StandardScaler to numerical features
+scaler_X = StandardScaler()
+X_train_scaled = scaler_X.fit_transform(X_train_numerical)
+X_test_scaled = scaler_X.transform(X_test_numerical)
 
-# Use a separate scaler for y (target variable)
-scaler_y_1 = StandardScaler()
-y_train_scaled_1 = scaler_y_1.fit_transform(y_train_reshaped)  # Reshaped target variable for scaling
-y_test_scaled_1 = scaler_y_1.transform(y_test_reshaped)
+# Scale the target variable y
+scaler_y = StandardScaler()
+y_train_scaled = scaler_y.fit_transform(y_train.values.reshape(-1, 1))
+y_test_scaled = scaler_y.transform(y_test.values.reshape(-1, 1))
 
 # Initialize dictionaries for storing metrics and predictions
-metrics_scenario_1 = {}
-best_models_scenario_1 = {}
-predictions_scenario_1 = {}
+metrics = {}
+predictions = {}
 
 # Iterate over each unique CrimeCategory in the training dataset
 for category in df_replace_outliers['CrimeCategory'].unique():
     print(f"Processing CrimeCategory: {category}")
     
     # Filter the training data for the current category
-    X_category_train_1 = X_train_scaled_df[df_replace_outliers['CrimeCategory'] == category].copy()
+    category_mask = df_replace_outliers['CrimeCategory'] == category
+    X_category_train = X_train_scaled[category_mask]
+    y_category_train = y_train_scaled[category_mask]
 
-    # Drop irrelevant columns for training
-    columns_to_drop_1 = ['CrimeCategory', 'ProvinceCode', 'PoliceStationCode', 'Quarter']
-    X_category_train_1 = X_category_train_1.drop(columns=[col for col in columns_to_drop_1 if col in X_category_train_1.columns])
+    # # Ensure data consistency: Skip the category if lengths of X and y don't match
+    # if len(X_category_train) != len(y_category_train):
+    #     print(f"Skipping category {category} due to inconsistent sample sizes.")
+    #     continue
     
-    # Filter the target variable (y) for the current category
-    y_category_train_1 = y_train[df_replace_outliers['CrimeCategory'] == category]
-
-    # Ensure data consistency: Skip the category if lengths of X and y don't match
-    if len(X_category_train_1) != len(y_category_train_1):
-        print(f"Skipping category {category} due to inconsistent sample sizes.")
-        continue
-    
-    # Check if there's enough data for training
-    if len(X_category_train_1) < 2 or len(y_category_train_1) < 2:
-        print(f"Skipping category {category} due to insufficient data.")
-        continue
+    # # Check if there's enough data for training
+    # if len(X_category_train) < 2 or len(y_category_train) < 2:
+    #     print(f"Skipping category {category} due to insufficient data.")
+    #     continue
     
     # Initialize dictionaries to store category-specific results
-    predictions_scenario_1_category = {}
-    metrics_scenario_1_category = {}
-    
+    predictions_category = {}
+    metrics_category = {}
+
     # Iterate over each model and perform GridSearchCV
     for model_name, model in models.items():
-        print(f"Training and predicting with {model_name} for {category}...")
+        print(f"Training {model_name} for {category}...")
 
         # Perform GridSearchCV for hyperparameter tuning
-        grid_search_1 = GridSearchCV(estimator=model, param_grid=params[model_name], cv=2, n_jobs=-1, scoring='r2')
-        grid_search_1.fit(X_category_train_1, y_category_train_1)
-        
+        grid_search = GridSearchCV(estimator=model, param_grid=params[model_name], cv=3, n_jobs=-1, scoring='r2')
+        grid_search.fit(X_category_train, y_category_train.ravel())  # Flatten the target for training
+
         # Store the best model found by GridSearchCV
-        best_models_scenario_1[model_name] = grid_search_1.best_estimator_
+        best_model = grid_search.best_estimator_
 
-        # Prepare the test set for prediction (drop the same irrelevant columns)
-        X_test_scaled_filtered_1 = X_test_scaled_df.drop(columns=[col for col in columns_to_drop_1 if col in X_test_scaled_df.columns])
+        # Predict on the test set (use the filtered test data)
+        y_pred_scaled = best_model.predict(X_test_scaled)
 
-        # Make predictions on the test set
-        y_pred_1_scaled = grid_search_1.predict(X_test_scaled_df)
-       
-        # Convert predictions back to original scale using y_scaler (the scaler applied to the target variable)
-        y_pred_original_1 = scaler_y_1.inverse_transform(y_pred_1_scaled.reshape(-1, 1)).flatten()
-        y_test_original_1 = scaler_y_1.inverse_transform(y_test_scaled_1.reshape(-1, 1)).flatten()
+        # Inverse transform the predictions to the original scale
+        y_pred_original = scaler_y.inverse_transform(y_pred_scaled.reshape(-1, 1)).flatten()
+        y_test_original = scaler_y.inverse_transform(y_test_scaled).flatten()
 
-        # Store the predictions in the original values for the current category
-        predictions_scenario_1[name] =  y_pred_original_1
- 
+        # Store the predictions for the current category and model
+        predictions[model_name] = y_pred_original
+
         # Calculate evaluation metrics
-        mse = mean_squared_error(y_test_original_1, y_pred_original_1)
-        mae = mean_absolute_error(y_test_original_1, y_pred_original_1)
-        r2 = r2_score(y_test_original_1, y_pred_original_1)
+        mse = mean_squared_error(y_test_original, y_pred_original)
+        mae = mean_absolute_error(y_test_original, y_pred_original)
+        r2 = r2_score(y_test_original, y_pred_original)
         rmse = np.sqrt(mse)
         
-        # Store the metrics for the current model
-        metrics_scenario_1[model_name] = {
-            'Algorithm' : name ,
-            'CrimeCategory': X_test_categories['CrimeCategory'],
-            'ProvinceCode': X_test_categories['ProvinceCode'],
-            'PoliceStationCode': X_test_categories['PoliceStationCode'],
-            'Quarter': X_test_categories['Quarter'],
+        # Store the metrics for the current model and category
+        metrics[model_name] = {
+            'Algorithm': model_name,
+            'CrimeCategory': category,
             'MSE': mse,
             'MAE': mae,
             'R²': r2,
             'RMSE': rmse
         }
 
-        metrics_scenario_1_df = pd.DataFrame(metrics_scenario_1)
-        
         # Display the calculated metrics
-        print(f"Metrics for {model_name}:")
+        print(f"Metrics for {model_name} (Category: {category}):")
         print(f"  MSE: {mse}")
         print(f"  MAE: {mae}")
         print(f"  R²: {r2}")
         print(f"  RMSE: {rmse}")
         print("\n" + "-"*50 + "\n")
 
-    predicted_values_1 = predictions_scenario_1[name] #predictions_scenario_1_category[model_name]  # Adjust 'model_name' accordingly
+    # Store predictions and metrics per category
+    predictions[category] = predictions_category
+    metrics[category] = metrics_category
 
-    # Ensure 'predicted_values' is a list or a Series before creating the DataFrame
-    predicted_values_1 = pd.Series(predicted_values_1)
+# Convert metrics to a DataFrame for analysis
+metrics_df = pd.DataFrame(metrics)
 
-    # Now create the DataFrame with all columns properly aligned
-    results_1_df = pd.DataFrame({
-        'Algorithm' : name ,
-        'CrimeCategory': X_test_categories['CrimeCategory'],
-        'ProvinceCode': X_test_categories['ProvinceCode'],
-        'PoliceStationCode': X_test_categories['PoliceStationCode'],
-        'Quarter': X_test_categories['Quarter'],
-        'TrueValue': y_test_scaled_1.flatten(),
-        'PredictedValue': predicted_values_1
-    })
+# Display the results DataFrame
+print(metrics_df)
 
-    print(results_1_df)
+# #+++++++++++++++++++++++++++++++++++++++++++++
+# #++++++++++++++++++++++++++++++++++++++++++++++
 
-     # Store predictions and metrics for the current category
-    # predictions_per_category_scenario_1[category] = predictions_scenario_1_category
-    # metrics_per_category_scenario_1[category] = metrics_scenario_1_category
+# # Scenario 2 - One-hot encoding for 'PoliceStationCode' and 'Quarter'
+# onehot_encoder_train_2 = OneHotEncoder()
 
-#+++++++++++++++++++++++++++++++++++++++++++++
-#++++++++++++++++++++++++++++++++++++++++++++++
+# # Copy the training data
+# data_onehot_encoded_train_2 = X_train_display.copy()
 
-# Scenario 2 - One-hot encoding for 'PoliceStationCode' and 'Quarter'
-onehot_encoder_train_2 = OneHotEncoder()
+# # Apply One-hot encoding to 'PoliceStationCode' and 'Quarter' in the training set
+# encoded_features_onehot_encoded_train_2 = onehot_encoder_train_2.fit_transform(
+#     data_onehot_encoded_train_2[['PoliceStationCode', 'Quarter']]).toarray()
 
-# Copy the training data
-data_onehot_encoded_train_2 = X_train_display.copy()
+# encoded_df_onehot_encoded_train_2 = pd.DataFrame(
+#     encoded_features_onehot_encoded_train_2,
+#     columns=onehot_encoder_train_2.get_feature_names_out(['PoliceStationCode', 'Quarter'])
+# )
 
-# Apply One-hot encoding to 'PoliceStationCode' and 'Quarter' in the training set
-encoded_features_onehot_encoded_train_2 = onehot_encoder_train_2.fit_transform(
-    data_onehot_encoded_train_2[['PoliceStationCode', 'Quarter']]).toarray()
+# data_onehot_encoded_train_2 = pd.concat(
+#     [data_onehot_encoded_train_2, encoded_df_onehot_encoded_train_2], axis=1
+# ).drop(['PoliceStationCode', 'Quarter'], axis=1)
 
-encoded_df_onehot_encoded_train_2 = pd.DataFrame(
-    encoded_features_onehot_encoded_train_2,
-    columns=onehot_encoder_train_2.get_feature_names_out(['PoliceStationCode', 'Quarter'])
-)
+# # Apply the same encoding to the test set
+# data_onehot_encoded_test_2 = X_test_display.copy()
 
-data_onehot_encoded_train_2 = pd.concat(
-    [data_onehot_encoded_train_2, encoded_df_onehot_encoded_train_2], axis=1
-).drop(['PoliceStationCode', 'Quarter'], axis=1)
+# encoded_features_onehot_encoded_test_2 = onehot_encoder_train_2.transform(
+#     data_onehot_encoded_test_2[['PoliceStationCode', 'Quarter']]).toarray()
 
-# Apply the same encoding to the test set
-data_onehot_encoded_test_2 = X_test_display.copy()
+# encoded_df_onehot_encoded_test_2 = pd.DataFrame(
+#     encoded_features_onehot_encoded_test_2,
+#     columns=onehot_encoder_train_2.get_feature_names_out(['PoliceStationCode', 'Quarter'])
+# )
 
-encoded_features_onehot_encoded_test_2 = onehot_encoder_train_2.transform(
-    data_onehot_encoded_test_2[['PoliceStationCode', 'Quarter']]).toarray()
+# data_onehot_encoded_test_2 = pd.concat(
+#     [data_onehot_encoded_test_2, encoded_df_onehot_encoded_test_2], axis=1
+# ).drop(['PoliceStationCode', 'Quarter'], axis=1)
 
-encoded_df_onehot_encoded_test_2 = pd.DataFrame(
-    encoded_features_onehot_encoded_test_2,
-    columns=onehot_encoder_train_2.get_feature_names_out(['PoliceStationCode', 'Quarter'])
-)
+# # Select only numerical columns
+# numerical_columns_onehot_encoded_2 = data_onehot_encoded_train_2.select_dtypes(include=[np.number]).columns
+# data_numerical_onehot_only_train_2 = data_onehot_encoded_train_2[numerical_columns_onehot_encoded_2]
+# data_numerical_onehot_only_test_2 = data_onehot_encoded_test_2[numerical_columns_onehot_encoded_2]
 
-data_onehot_encoded_test_2 = pd.concat(
-    [data_onehot_encoded_test_2, encoded_df_onehot_encoded_test_2], axis=1
-).drop(['PoliceStationCode', 'Quarter'], axis=1)
+# # Apply StandardScaler
+# scaler_X_2 = StandardScaler()
+# X_onehot_train_scaled_2 = scaler_X_2.fit_transform(data_numerical_onehot_only_train_2)
+# X_onehot_test_scaled_2 = scaler_X_2.transform(data_numerical_onehot_only_test_2)
 
-# Select only numerical columns
-numerical_columns_onehot_encoded_2 = data_onehot_encoded_train_2.select_dtypes(include=[np.number]).columns
-data_numerical_onehot_only_train_2 = data_onehot_encoded_train_2[numerical_columns_onehot_encoded_2]
-data_numerical_onehot_only_test_2 = data_onehot_encoded_test_2[numerical_columns_onehot_encoded_2]
+# # Use a separate scaler for y (target variable)
+# scaler_y_2 = StandardScaler()
+# y_train_scaled_2 = scaler_y_2.fit_transform(y_train_reshaped)  # Reshaped target variable for scaling
+# y_test_scaled_2 = scaler_y_2.transform(y_test_reshaped)
 
-# Apply StandardScaler
-scaler_X_2 = StandardScaler()
-X_onehot_train_scaled_2 = scaler_X_2.fit_transform(data_numerical_onehot_only_train_2)
-X_onehot_test_scaled_2 = scaler_X_2.transform(data_numerical_onehot_only_test_2)
+# # Train and Evaluate
+# metrics_scenario_2 = {}
+# best_models_scenario_2 = {}
+# predictions_scenario_2 = {}
 
-# Use a separate scaler for y (target variable)
-scaler_y_2 = StandardScaler()
-y_train_scaled_2 = scaler_y_2.fit_transform(y_train_reshaped)  # Reshaped target variable for scaling
-y_test_scaled_2 = scaler_y_2.transform(y_test_reshaped)
+# # Before fitting the model, ensure that X_onehot_train_scaled and y_train_scaled are of the same length
+# assert len(X_onehot_train_scaled_2) == len(y_train_scaled_2), "Mismatch in the length of X_onehot_train_scaled and y_train_scaled"
 
-# Train and Evaluate
-metrics_scenario_2 = {}
-best_models_scenario_2 = {}
-predictions_scenario_2 = {}
+# # Initialize dictionaries to store predictions and metrics for each category
+# predictions_per_category_scenario_2 = {}
+# metrics_per_category_scenario_2 = {}
 
-# Before fitting the model, ensure that X_onehot_train_scaled and y_train_scaled are of the same length
-assert len(X_onehot_train_scaled_2) == len(y_train_scaled_2), "Mismatch in the length of X_onehot_train_scaled and y_train_scaled"
-
-# Initialize dictionaries to store predictions and metrics for each category
-predictions_per_category_scenario_2 = {}
-metrics_per_category_scenario_2 = {}
-
-# Iterate over each unique CrimeCategory in the dataset
-for category in df_replace_outliers['CrimeCategory'].unique():
-    print(f"Processing CrimeCategory: {category}")
+# # Iterate over each unique CrimeCategory in the dataset
+# for category in df_replace_outliers['CrimeCategory'].unique():
+#     print(f"Processing CrimeCategory: {category}")
     
-    # Filter the dataset for the current category
-    X_category = X_train_scaled_df[df_replace_outliers['CrimeCategory'] == category]
+#     # Filter the dataset for the current category
+#     X_category = X_train_scaled_df[df_replace_outliers['CrimeCategory'] == category]
     
-    # Drop the specified columns if they exist in the DataFrame
-    columns_to_drop_2 = ['CrimeCategory', 'ProvinceCode', 'PoliceStationCode', 'Quarter']
-    X_category_2 = X_category.drop(columns=[col for col in columns_to_drop_2 if col in X_category.columns])
+#     # Drop the specified columns if they exist in the DataFrame
+#     columns_to_drop_2 = ['CrimeCategory', 'ProvinceCode', 'PoliceStationCode', 'Quarter']
+#     X_category_2 = X_category.drop(columns=[col for col in columns_to_drop_2 if col in X_category.columns])
     
-    # Filter the target variable
-    y_category_2 = y_train[df_replace_outliers['CrimeCategory'] == category]
+#     # Filter the target variable
+#     y_category_2 = y_train[df_replace_outliers['CrimeCategory'] == category]
 
-    # Check if the lengths of X_category and y_category are consistent
-    if len(X_category_2) != len(y_category_2):
-        print(f"Skipping category {category} due to inconsistent sample sizes.")
-        continue
+#     # Check if the lengths of X_category and y_category are consistent
+#     if len(X_category_2) != len(y_category_2):
+#         print(f"Skipping category {category} due to inconsistent sample sizes.")
+#         continue
     
-    # Check if there's enough data to train the model
-    if len(X_category_2) < 2 or len(y_category_2) < 2:
-        print(f"Skipping category {category} due to insufficient data.")
-        continue
+#     # Check if there's enough data to train the model
+#     if len(X_category_2) < 2 or len(y_category_2) < 2:
+#         print(f"Skipping category {category} due to insufficient data.")
+#         continue
     
-    # Initialize dictionaries to store results for the current category
-    predictions_scenario_2_category = {}
-    metrics_scenario_2_category = {}
+#     # Initialize dictionaries to store results for the current category
+#     predictions_scenario_2_category = {}
+#     metrics_scenario_2_category = {}
     
-    # Iterate over each model, perform GridSearchCV, and make predictions
-    for name, model in models.items():
-        print(f"Training and predicting with {name} for {category}...")
+#     # Iterate over each model, perform GridSearchCV, and make predictions
+#     for name, model in models.items():
+#         print(f"Training and predicting with {name} for {category}...")
 
-        # For KNeighborsRegressor, adjust n_neighbors based on the available samples
-        if name == 'KNNR':
-            n_samples_fit = len(X_category_2)
-            if n_samples_fit < 5:  # If fewer than 5 samples, adjust n_neighbors to n_samples_fit
-                params['KNNR']['n_neighbors'] = [n_samples_fit]
+#         # For KNeighborsRegressor, adjust n_neighbors based on the available samples
+#         if name == 'KNNR':
+#             n_samples_fit = len(X_category_2)
+#             if n_samples_fit < 5:  # If fewer than 5 samples, adjust n_neighbors to n_samples_fit
+#                 params['KNNR']['n_neighbors'] = [n_samples_fit]
         
-        # Perform GridSearchCV to find the best parameters
-        grid_search_2 = GridSearchCV(estimator=model, param_grid=params[name], cv=2, n_jobs=-1, scoring='r2')
-        grid_search_2.fit(X_category, y_category_2)
+#         # Perform GridSearchCV to find the best parameters
+#         grid_search_2 = GridSearchCV(estimator=model, param_grid=params[name], cv=2, n_jobs=-1, scoring='r2')
+#         grid_search_2.fit(X_category, y_category_2)
         
-        # Store the best model
-        best_models_scenario_2[name] = grid_search_2.best_estimator_
+#         # Store the best model
+#         best_models_scenario_2[name] = grid_search_2.best_estimator_
 
-        # Prepare X_test_scaled for prediction by excluding the categorical columns
-        X_test_scaled_filtered_2 = X_test_scaled_df.drop(columns=[col for col in columns_to_drop_2 if col in X_test_scaled_df.columns])
+#         # Prepare X_test_scaled for prediction by excluding the categorical columns
+#         X_test_scaled_filtered_2 = X_test_scaled_df.drop(columns=[col for col in columns_to_drop_2 if col in X_test_scaled_df.columns])
         
-        # Make predictions on the test set
-        y_pred_2_scaled = grid_search_2.predict(X_test_scaled_filtered_2)
+#         # Make predictions on the test set
+#         y_pred_2_scaled = grid_search_2.predict(X_test_scaled_filtered_2)
        
-         # Convert predictions back to original scale using y_scaler (the scaler applied to the target variable)
-         # Inverse transform predictions back to original scale
-        y_pred_original_2 = scaler_y_2.inverse_transform(y_pred_2_scaled.reshape(-1, 1)).flatten()
-        y_test_original_2 = scaler_y_2.inverse_transform(y_test_scaled_2.reshape(-1, 1)).flatten()
+#          # Convert predictions back to original scale using y_scaler (the scaler applied to the target variable)
+#          # Inverse transform predictions back to original scale
+#         y_pred_original_2 = scaler_y_2.inverse_transform(y_pred_2_scaled.reshape(-1, 1)).flatten()
+#         y_test_original_2 = scaler_y_2.inverse_transform(y_test_scaled_2.reshape(-1, 1)).flatten()
 
-        # Store the predictions in the original values for the current category
-        predictions_scenario_2[name] = y_pred_original_2
+#         # Store the predictions in the original values for the current category
+#         predictions_scenario_2[name] = y_pred_original_2
 
-        # Calculate evaluation metrics
-        mse_scenario_2 = mean_squared_error(y_test_original_2, y_pred_original_2)
-        mae_scenario_2 = mean_absolute_error(y_test_original_2, y_pred_original_2)
-        r2_scenario_2 = r2_score(y_test_original_2, y_pred_original_2)
-        rmse_scenario_2 = np.sqrt(mse_scenario_2)
+#         # Calculate evaluation metrics
+#         mse_scenario_2 = mean_squared_error(y_test_original_2, y_pred_original_2)
+#         mae_scenario_2 = mean_absolute_error(y_test_original_2, y_pred_original_2)
+#         r2_scenario_2 = r2_score(y_test_original_2, y_pred_original_2)
+#         rmse_scenario_2 = np.sqrt(mse_scenario_2)
         
-        # Store the metrics
-        metrics_scenario_2[name] = {
-            'CrimeCategory': X_test_categories['CrimeCategory'],
-            'ProvinceCode': X_test_categories['ProvinceCode'],
-            'PoliceStationCode': X_test_categories['PoliceStationCode'],
-            'Quarter': X_test_categories['Quarter'],
-            'MSE': mse_scenario_2,
-            'MAE': mae_scenario_2,
-            'R²': r2_scenario_2,
-            'RMSE': rmse_scenario_2
-        }
+#         # Store the metrics
+#         metrics_scenario_2[name] = {
+#             'CrimeCategory': X_test_categories['CrimeCategory'],
+#             'ProvinceCode': X_test_categories['ProvinceCode'],
+#             'PoliceStationCode': X_test_categories['PoliceStationCode'],
+#             'Quarter': X_test_categories['Quarter'],
+#             'MSE': mse_scenario_2,
+#             'MAE': mae_scenario_2,
+#             'R²': r2_scenario_2,
+#             'RMSE': rmse_scenario_2
+#         }
 
-        metrics_scenario_2_df = pd.DataFrame(metrics_scenario_2)
+#         metrics_scenario_2_df = pd.DataFrame(metrics_scenario_2)
         
-        # Display the metrics
-        print(f"Metrics scenario_2 for {name}:")
-        print(f"  MSE: {mse_scenario_2}")
-        print(f"  MAE: {mae_scenario_2}")
-        print(f"  R²: {r2_scenario_2}")
-        print(f"  RMSE: {rmse_scenario_2}")
-        print("\n" + "-"*50 + "\n")
+#         # Display the metrics
+#         print(f"Metrics scenario_2 for {name}:")
+#         print(f"  MSE: {mse_scenario_2}")
+#         print(f"  MAE: {mae_scenario_2}")
+#         print(f"  R²: {r2_scenario_2}")
+#         print(f"  RMSE: {rmse_scenario_2}")
+#         print("\n" + "-"*50 + "\n")
 
 
-    predicted_values_2 = predictions_scenario_2[name] # predictions_scenario_2_category[model_name]  # Adjust 'model_name' accordingly 
+#     predicted_values_2 = predictions_scenario_2[name] # predictions_scenario_2_category[model_name]  # Adjust 'model_name' accordingly 
 
-    # Ensure 'predicted_values' is a list or a Series before creating the DataFrame
-    predicted_values_2 = pd.Series(predicted_values_2)
+#     # Ensure 'predicted_values' is a list or a Series before creating the DataFrame
+#     predicted_values_2 = pd.Series(predicted_values_2)
 
-    # Now create the DataFrame with all columns properly aligned
-    results_2_df = pd.DataFrame({
-        'CrimeCategory': X_test_categories['CrimeCategory'],
-        'ProvinceCode': X_test_categories['ProvinceCode'],
-        'PoliceStationCode': X_test_categories['PoliceStationCode'],
-        'Quarter': X_test_categories['Quarter'],
-        'TrueValue': y_test_scaled_2.flatten(),
-        'PredictedValue': predicted_values_2
-    })
+#     # Now create the DataFrame with all columns properly aligned
+#     results_2_df = pd.DataFrame({
+#         'CrimeCategory': X_test_categories['CrimeCategory'],
+#         'ProvinceCode': X_test_categories['ProvinceCode'],
+#         'PoliceStationCode': X_test_categories['PoliceStationCode'],
+#         'Quarter': X_test_categories['Quarter'],
+#         'TrueValue': y_test_scaled_2.flatten(),
+#         'PredictedValue': predicted_values_2
+#     })
 
-    # Store predictions and metrics for the current category
-    predictions_per_category_scenario_2[category] = predictions_scenario_2_category
-    metrics_per_category_scenario_2[category] = metrics_scenario_2_category
+#     # Store predictions and metrics for the current category
+#     predictions_per_category_scenario_2[category] = predictions_scenario_2_category
+#     metrics_per_category_scenario_2[category] = metrics_scenario_2_category
 
-#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-   # Scenario 3 - Label encoding for 'PoliceStationCode' and One-hot encoding for 'Quarter'
+#    # Scenario 3 - Label encoding for 'PoliceStationCode' and One-hot encoding for 'Quarter'
 
-# Label encode 'PoliceStationCode'
-label_encoder_police_station_3 = LabelEncoder()
-data_label_onehot_train_3 = X_train_display.copy()
+# # Label encode 'PoliceStationCode'
+# label_encoder_police_station_3 = LabelEncoder()
+# data_label_onehot_train_3 = X_train_display.copy()
 
-# Apply Label encoding for 'PoliceStationCode' in the training set
-data_label_onehot_train_3['PoliceStationCode'] = label_encoder_police_station_3.fit_transform(data_label_onehot_train_3['PoliceStationCode'])
+# # Apply Label encoding for 'PoliceStationCode' in the training set
+# data_label_onehot_train_3['PoliceStationCode'] = label_encoder_police_station_3.fit_transform(data_label_onehot_train_3['PoliceStationCode'])
 
-# One-hot encode 'Quarter'
-onehot_encoder_quarter_3 = OneHotEncoder()
+# # One-hot encode 'Quarter'
+# onehot_encoder_quarter_3 = OneHotEncoder()
 
-# Apply One-hot encoding for 'Quarter' in the training set
-encoded_features_quarter_train_3 = onehot_encoder_quarter_3.fit_transform(data_label_onehot_train_3[['Quarter']]).toarray()
+# # Apply One-hot encoding for 'Quarter' in the training set
+# encoded_features_quarter_train_3 = onehot_encoder_quarter_3.fit_transform(data_label_onehot_train_3[['Quarter']]).toarray()
 
-encoded_df_quarter_train_3 = pd.DataFrame(
-    encoded_features_quarter_train_3,
-    columns=onehot_encoder_quarter_3.get_feature_names_out(['Quarter'])
-)
+# encoded_df_quarter_train_3 = pd.DataFrame(
+#     encoded_features_quarter_train_3,
+#     columns=onehot_encoder_quarter_3.get_feature_names_out(['Quarter'])
+# )
 
-data_label_onehot_train_3 = pd.concat(
-    [data_label_onehot_train_3, encoded_df_quarter_train_3], axis=1
-).drop(['Quarter'], axis=1)
+# data_label_onehot_train_3 = pd.concat(
+#     [data_label_onehot_train_3, encoded_df_quarter_train_3], axis=1
+# ).drop(['Quarter'], axis=1)
 
-# Apply the same encoding to the test set
-data_label_onehot_test_3 = X_test_display.copy()
+# # Apply the same encoding to the test set
+# data_label_onehot_test_3 = X_test_display.copy()
 
-# Label encode 'PoliceStationCode' in the test set
-data_label_onehot_test_3['PoliceStationCode'] = label_encoder_police_station_3.transform(data_label_onehot_test_3['PoliceStationCode'])
+# # Label encode 'PoliceStationCode' in the test set
+# data_label_onehot_test_3['PoliceStationCode'] = label_encoder_police_station_3.transform(data_label_onehot_test_3['PoliceStationCode'])
 
-# One-hot encode 'Quarter' in the test set
-encoded_features_quarter_test_3 = onehot_encoder_quarter_3.transform(data_label_onehot_test_3[['Quarter']]).toarray()
+# # One-hot encode 'Quarter' in the test set
+# encoded_features_quarter_test_3 = onehot_encoder_quarter_3.transform(data_label_onehot_test_3[['Quarter']]).toarray()
 
-encoded_df_quarter_test_3 = pd.DataFrame(
-    encoded_features_quarter_test_3,
-    columns=onehot_encoder_quarter_3.get_feature_names_out(['Quarter'])
-)
+# encoded_df_quarter_test_3 = pd.DataFrame(
+#     encoded_features_quarter_test_3,
+#     columns=onehot_encoder_quarter_3.get_feature_names_out(['Quarter'])
+# )
 
-data_label_onehot_test_3 = pd.concat(
-    [data_label_onehot_test_3, encoded_df_quarter_test_3], axis=1
-).drop(['Quarter'], axis=1)
+# data_label_onehot_test_3 = pd.concat(
+#     [data_label_onehot_test_3, encoded_df_quarter_test_3], axis=1
+# ).drop(['Quarter'], axis=1)
 
-# Select only numerical columns
-numerical_columns_label_onehot_3 = data_label_onehot_train_3.select_dtypes(include=[np.number]).columns
-data_numerical_label_onehot_train_3 = data_label_onehot_train_3[numerical_columns_label_onehot_3]
-data_numerical_label_onehot_test_3 = data_label_onehot_test_3[numerical_columns_label_onehot_3]
+# # Select only numerical columns
+# numerical_columns_label_onehot_3 = data_label_onehot_train_3.select_dtypes(include=[np.number]).columns
+# data_numerical_label_onehot_train_3 = data_label_onehot_train_3[numerical_columns_label_onehot_3]
+# data_numerical_label_onehot_test_3 = data_label_onehot_test_3[numerical_columns_label_onehot_3]
 
-# Apply StandardScaler
-scaler_X_3 = StandardScaler()
-X_label_onehot_train_scaled_3 = scaler_X_3.fit_transform(data_numerical_label_onehot_train_3)
-X_label_onehot_test_scaled_3 = scaler_X_3.transform(data_numerical_label_onehot_test_3)
+# # Apply StandardScaler
+# scaler_X_3 = StandardScaler()
+# X_label_onehot_train_scaled_3 = scaler_X_3.fit_transform(data_numerical_label_onehot_train_3)
+# X_label_onehot_test_scaled_3 = scaler_X_3.transform(data_numerical_label_onehot_test_3)
 
-# Use a separate scaler for y (target variable)
-scaler_y_3 = StandardScaler()
-y_train_scaled_3 = scaler_y_3.fit_transform(y_train_reshaped)  # Reshaped target variable for scaling
-y_test_scaled_3 = scaler_y_3.transform(y_test_reshaped)
+# # Use a separate scaler for y (target variable)
+# scaler_y_3 = StandardScaler()
+# y_train_scaled_3 = scaler_y_3.fit_transform(y_train_reshaped)  # Reshaped target variable for scaling
+# y_test_scaled_3 = scaler_y_3.transform(y_test_reshaped)
 
-# Train and Evaluate
-metrics_scenario_3 = {}
-best_models_scenario_3 = {}
-predictions_scenario_3 = {}
+# # Train and Evaluate
+# metrics_scenario_3 = {}
+# best_models_scenario_3 = {}
+# predictions_scenario_3 = {}
 
-# Before fitting the model, ensure that X_label_onehot_train_scaled and y_train_scaled are of the same length
-assert len(X_label_onehot_train_scaled_3) == len(y_train_scaled_3), "Mismatch in the length of X_label_onehot_train_scaled and y_train_scaled"
+# # Before fitting the model, ensure that X_label_onehot_train_scaled and y_train_scaled are of the same length
+# assert len(X_label_onehot_train_scaled_3) == len(y_train_scaled_3), "Mismatch in the length of X_label_onehot_train_scaled and y_train_scaled"
 
-# Initialize dictionaries to store predictions and metrics for each category
-predictions_per_category_scenario_3 = {}
-metrics_per_category_scenario_3 = {}
+# # Initialize dictionaries to store predictions and metrics for each category
+# predictions_per_category_scenario_3 = {}
+# metrics_per_category_scenario_3 = {}
 
-# Iterate over each unique CrimeCategory in the dataset
-for category in df_replace_outliers['CrimeCategory'].unique():
-    print(f"Processing CrimeCategory: {category}")
+# # Iterate over each unique CrimeCategory in the dataset
+# for category in df_replace_outliers['CrimeCategory'].unique():
+#     print(f"Processing CrimeCategory: {category}")
     
-    # Filter the dataset for the current category
-    X_category_3 = X_train_scaled_df[df_replace_outliers['CrimeCategory'] == category]
+#     # Filter the dataset for the current category
+#     X_category_3 = X_train_scaled_df[df_replace_outliers['CrimeCategory'] == category]
     
-    # Drop the specified columns if they exist in the DataFrame
-    columns_to_drop_3 = ['CrimeCategory', 'ProvinceCode', 'PoliceStationCode', 'Quarter']
-    X_category_3 = X_category_3.drop(columns=[col for col in columns_to_drop_3 if col in X_category_3.columns])
+#     # Drop the specified columns if they exist in the DataFrame
+#     columns_to_drop_3 = ['CrimeCategory', 'ProvinceCode', 'PoliceStationCode', 'Quarter']
+#     X_category_3 = X_category_3.drop(columns=[col for col in columns_to_drop_3 if col in X_category_3.columns])
     
-    # Filter the target variable
-    y_category_3 = y_train[df_replace_outliers['CrimeCategory'] == category]
+#     # Filter the target variable
+#     y_category_3 = y_train[df_replace_outliers['CrimeCategory'] == category]
 
-    # Check if the lengths of X_category and y_category are consistent
-    if len(X_category) != len(y_category_3):
-        print(f"Skipping category {category} due to inconsistent sample sizes.")
-        continue
+#     # Check if the lengths of X_category and y_category are consistent
+#     if len(X_category) != len(y_category_3):
+#         print(f"Skipping category {category} due to inconsistent sample sizes.")
+#         continue
     
-    # Check if there's enough data to train the model
-    if len(X_category_3) < 2 or len(y_category_3) < 2:
-        print(f"Skipping category {category} due to insufficient data.")
-        continue
+#     # Check if there's enough data to train the model
+#     if len(X_category_3) < 2 or len(y_category_3) < 2:
+#         print(f"Skipping category {category} due to insufficient data.")
+#         continue
     
-    # Initialize dictionaries to store results for the current category
-    predictions_scenario_3_category = {}
-    metrics_scenario_3_category = {}
+#     # Initialize dictionaries to store results for the current category
+#     predictions_scenario_3_category = {}
+#     metrics_scenario_3_category = {}
     
-    # Iterate over each model, perform GridSearchCV, and make predictions
-    for name, model in models.items():
-        print(f"Training and predicting with {name} for {category}...")
+#     # Iterate over each model, perform GridSearchCV, and make predictions
+#     for name, model in models.items():
+#         print(f"Training and predicting with {name} for {category}...")
 
-        # For KNeighborsRegressor, adjust n_neighbors based on the available samples
-        if name == 'KNNR':
-            n_samples_fit = len(X_category_3)
-            if n_samples_fit < 5:  # If fewer than 5 samples, adjust n_neighbors to n_samples_fit
-                params['KNNR']['n_neighbors'] = [n_samples_fit]
+#         # For KNeighborsRegressor, adjust n_neighbors based on the available samples
+#         if name == 'KNNR':
+#             n_samples_fit = len(X_category_3)
+#             if n_samples_fit < 5:  # If fewer than 5 samples, adjust n_neighbors to n_samples_fit
+#                 params['KNNR']['n_neighbors'] = [n_samples_fit]
         
-        # Perform GridSearchCV to find the best parameters
-        grid_search_3 = GridSearchCV(estimator=model, param_grid=params[name], cv=2, n_jobs=-1, scoring='r2')
-        grid_search_3.fit(X_category, y_category_3)
+#         # Perform GridSearchCV to find the best parameters
+#         grid_search_3 = GridSearchCV(estimator=model, param_grid=params[name], cv=2, n_jobs=-1, scoring='r2')
+#         grid_search_3.fit(X_category, y_category_3)
         
-        # Store the best model
-        best_models_scenario_3[name] = grid_search_3.best_estimator_
+#         # Store the best model
+#         best_models_scenario_3[name] = grid_search_3.best_estimator_
 
-        # Prepare X_test_scaled for prediction by excluding the categorical columns
-        X_test_scaled_filtered_3 = X_test_scaled_df.drop(columns=[col for col in columns_to_drop_3 if col in X_test_scaled_df.columns])
+#         # Prepare X_test_scaled for prediction by excluding the categorical columns
+#         X_test_scaled_filtered_3 = X_test_scaled_df.drop(columns=[col for col in columns_to_drop_3 if col in X_test_scaled_df.columns])
         
-        # Make predictions on the test set
-        y_pred_scaled_3 = grid_search_3.predict(X_test_scaled_filtered_3)
+#         # Make predictions on the test set
+#         y_pred_scaled_3 = grid_search_3.predict(X_test_scaled_filtered_3)
         
-        # Inverse transform predictions back to original scale
-        y_pred_original_3 = scaler_y_3.inverse_transform(y_pred_scaled_3.reshape(-1, 1)).flatten()
-        y_test_original_3 = scaler_y_3.inverse_transform(y_test_scaled_3.reshape(-1, 1)).flatten()
-        predictions_scenario_3[name] = y_pred_original_3
+#         # Inverse transform predictions back to original scale
+#         y_pred_original_3 = scaler_y_3.inverse_transform(y_pred_scaled_3.reshape(-1, 1)).flatten()
+#         y_test_original_3 = scaler_y_3.inverse_transform(y_test_scaled_3.reshape(-1, 1)).flatten()
+#         predictions_scenario_3[name] = y_pred_original_3
 
-        # Calculate evaluation metrics
-        mse_scenario_3 = mean_squared_error( y_test_original_3, y_pred_original_3)
-        mae_scenario_3 = mean_absolute_error( y_test_original_3, y_pred_original_3)
-        r2_scenario_3 = r2_score(y_test_original_3, y_pred_original_3)
-        rmse_scenario_3 = np.sqrt(mse_scenario_3)
+#         # Calculate evaluation metrics
+#         mse_scenario_3 = mean_squared_error( y_test_original_3, y_pred_original_3)
+#         mae_scenario_3 = mean_absolute_error( y_test_original_3, y_pred_original_3)
+#         r2_scenario_3 = r2_score(y_test_original_3, y_pred_original_3)
+#         rmse_scenario_3 = np.sqrt(mse_scenario_3)
         
-        # Store the metrics
-        metrics_scenario_3[name] = {
-            'CrimeCategory': X_test_categories['CrimeCategory'],
-            'ProvinceCode': X_test_categories['ProvinceCode'],
-            'PoliceStationCode': X_test_categories['PoliceStationCode'],
-            'Quarter': X_test_categories['Quarter'],
-            'MSE': mse_scenario_3,
-            'MAE': mae_scenario_3,
-            'R²': r2_scenario_3,
-            'RMSE': rmse_scenario_3
-        }
+#         # Store the metrics
+#         metrics_scenario_3[name] = {
+#             'CrimeCategory': X_test_categories['CrimeCategory'],
+#             'ProvinceCode': X_test_categories['ProvinceCode'],
+#             'PoliceStationCode': X_test_categories['PoliceStationCode'],
+#             'Quarter': X_test_categories['Quarter'],
+#             'MSE': mse_scenario_3,
+#             'MAE': mae_scenario_3,
+#             'R²': r2_scenario_3,
+#             'RMSE': rmse_scenario_3
+#         }
 
-        metrics_scenario_3_df = pd.DataFrame(metrics_scenario_3)
+#         metrics_scenario_3_df = pd.DataFrame(metrics_scenario_3)
         
-        # Display the metrics
-        print(f"Metrics scenario_3 for {name}:")
-        print(f"  MSE: {mse_scenario_3}")
-        print(f"  MAE: {mae_scenario_3}")
-        print(f"  R²: {r2_scenario_3}")
-        print(f"  RMSE: {rmse_scenario_3}")
-        print("\n" + "-"*50 + "\n")
+#         # Display the metrics
+#         print(f"Metrics scenario_3 for {name}:")
+#         print(f"  MSE: {mse_scenario_3}")
+#         print(f"  MAE: {mae_scenario_3}")
+#         print(f"  R²: {r2_scenario_3}")
+#         print(f"  RMSE: {rmse_scenario_3}")
+#         print("\n" + "-"*50 + "\n")
 
-    predicted_values_3 = predictions_scenario_3[name] 
+#     predicted_values_3 = predictions_scenario_3[name] 
 
-    # Ensure 'predicted_values' is a list or a Series before creating the DataFrame
-    predicted_values_3 = pd.Series(predicted_values_3)
+#     # Ensure 'predicted_values' is a list or a Series before creating the DataFrame
+#     predicted_values_3 = pd.Series(predicted_values_3)
 
-    # Now create the DataFrame with all columns properly aligned
-    results_3_df = pd.DataFrame({
-        'CrimeCategory': X_test_categories['CrimeCategory'],
-        'ProvinceCode': X_test_categories['ProvinceCode'],
-        'PoliceStationCode': X_test_categories['PoliceStationCode'],
-        'Quarter': X_test_categories['Quarter'],
-        'TrueValue': y_test_scaled_3.flatten(),
-        'PredictedValue': predicted_values_3
-    })
+#     # Now create the DataFrame with all columns properly aligned
+#     results_3_df = pd.DataFrame({
+#         'CrimeCategory': X_test_categories['CrimeCategory'],
+#         'ProvinceCode': X_test_categories['ProvinceCode'],
+#         'PoliceStationCode': X_test_categories['PoliceStationCode'],
+#         'Quarter': X_test_categories['Quarter'],
+#         'TrueValue': y_test_scaled_3.flatten(),
+#         'PredictedValue': predicted_values_3
+#     })
 
-    # Store predictions and metrics for the current category
-    predictions_per_category_scenario_3[category] = predictions_scenario_3_category
-    metrics_per_category_scenario_3[category] = metrics_scenario_3_category
+#     # Store predictions and metrics for the current category
+#     predictions_per_category_scenario_3[category] = predictions_scenario_3_category
+#     metrics_per_category_scenario_3[category] = metrics_scenario_3_category
 
-#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-   # Scenario 4 - Label encoding for 'Quarter' and One-hot encoding for 'PoliceStationCode'
+#    # Scenario 4 - Label encoding for 'Quarter' and One-hot encoding for 'PoliceStationCode'
 
-# Label encode 'Quarter'
-label_encoder_quarter_4 = LabelEncoder()
-data_label_onehot_train_4 = X_train_display.copy()
+# # Label encode 'Quarter'
+# label_encoder_quarter_4 = LabelEncoder()
+# data_label_onehot_train_4 = X_train_display.copy()
 
-# Apply Label encoding for 'Quarter' in the training set
-data_label_onehot_train_4['Quarter'] = label_encoder_quarter_4.fit_transform(data_label_onehot_train_4['Quarter'])
+# # Apply Label encoding for 'Quarter' in the training set
+# data_label_onehot_train_4['Quarter'] = label_encoder_quarter_4.fit_transform(data_label_onehot_train_4['Quarter'])
 
-# One-hot encode 'PoliceStationCode'
-onehot_encoder_police_station_4 = OneHotEncoder()
+# # One-hot encode 'PoliceStationCode'
+# onehot_encoder_police_station_4 = OneHotEncoder()
 
-# Apply One-hot encoding for 'PoliceStationCode' in the training set
-encoded_features_police_train_4 = onehot_encoder_police_station_4.fit_transform(data_label_onehot_train_4[['PoliceStationCode']]).toarray()
+# # Apply One-hot encoding for 'PoliceStationCode' in the training set
+# encoded_features_police_train_4 = onehot_encoder_police_station_4.fit_transform(data_label_onehot_train_4[['PoliceStationCode']]).toarray()
 
-encoded_df_police_train_4 = pd.DataFrame(
-    encoded_features_police_train_4,
-    columns=onehot_encoder_police_station_4.get_feature_names_out(['PoliceStationCode'])
-)
+# encoded_df_police_train_4 = pd.DataFrame(
+#     encoded_features_police_train_4,
+#     columns=onehot_encoder_police_station_4.get_feature_names_out(['PoliceStationCode'])
+# )
 
-data_label_onehot_train_4 = pd.concat(
-    [data_label_onehot_train_4, encoded_df_police_train_4], axis=1
-).drop(['PoliceStationCode'], axis=1)
+# data_label_onehot_train_4 = pd.concat(
+#     [data_label_onehot_train_4, encoded_df_police_train_4], axis=1
+# ).drop(['PoliceStationCode'], axis=1)
 
-# Apply the same encoding to the test set
-data_label_onehot_test_4 = X_test_display.copy()
+# # Apply the same encoding to the test set
+# data_label_onehot_test_4 = X_test_display.copy()
 
-# Label encode 'Quarter' in the test set
-data_label_onehot_test_4['Quarter'] = label_encoder_quarter_4.transform(data_label_onehot_test_4['Quarter'])
+# # Label encode 'Quarter' in the test set
+# data_label_onehot_test_4['Quarter'] = label_encoder_quarter_4.transform(data_label_onehot_test_4['Quarter'])
 
-# One-hot encode 'PoliceStationCode' in the test set
-encoded_features_police_test_4 = onehot_encoder_police_station_4.transform(data_label_onehot_test_4[['PoliceStationCode']]).toarray()
+# # One-hot encode 'PoliceStationCode' in the test set
+# encoded_features_police_test_4 = onehot_encoder_police_station_4.transform(data_label_onehot_test_4[['PoliceStationCode']]).toarray()
 
-encoded_df_police_test_4 = pd.DataFrame(
-    encoded_features_police_test_4,
-    columns=onehot_encoder_police_station_4.get_feature_names_out(['PoliceStationCode'])
-)
+# encoded_df_police_test_4 = pd.DataFrame(
+#     encoded_features_police_test_4,
+#     columns=onehot_encoder_police_station_4.get_feature_names_out(['PoliceStationCode'])
+# )
 
-data_label_onehot_test_4 = pd.concat(
-    [data_label_onehot_test_4, encoded_df_police_test_4], axis=1
-).drop(['PoliceStationCode'], axis=1)
+# data_label_onehot_test_4 = pd.concat(
+#     [data_label_onehot_test_4, encoded_df_police_test_4], axis=1
+# ).drop(['PoliceStationCode'], axis=1)
 
-# Select only numerical columns
-numerical_columns_label_onehot_4 = data_label_onehot_train_4.select_dtypes(include=[np.number]).columns
-data_numerical_label_onehot_train_4 = data_label_onehot_train_4[numerical_columns_label_onehot_4]
-data_numerical_label_onehot_test_4 = data_label_onehot_test_4[numerical_columns_label_onehot_4]
+# # Select only numerical columns
+# numerical_columns_label_onehot_4 = data_label_onehot_train_4.select_dtypes(include=[np.number]).columns
+# data_numerical_label_onehot_train_4 = data_label_onehot_train_4[numerical_columns_label_onehot_4]
+# data_numerical_label_onehot_test_4 = data_label_onehot_test_4[numerical_columns_label_onehot_4]
 
-# Apply StandardScaler
-scaler_X_4 = StandardScaler()
-X_label_onehot_train_scaled_4 = scaler_X_4.fit_transform(data_numerical_label_onehot_train_4)
-X_label_onehot_test_scaled_4 = scaler_X_4.transform(data_numerical_label_onehot_test_4)
+# # Apply StandardScaler
+# scaler_X_4 = StandardScaler()
+# X_label_onehot_train_scaled_4 = scaler_X_4.fit_transform(data_numerical_label_onehot_train_4)
+# X_label_onehot_test_scaled_4 = scaler_X_4.transform(data_numerical_label_onehot_test_4)
 
-# Use a separate scaler for y (target variable)
-scaler_y_4 = StandardScaler()
-y_train_scaled_4 = scaler_y_4.fit_transform(y_train_reshaped)  # Reshaped target variable for scaling
-y_test_scaled_4 = scaler_y_4.transform(y_test_reshaped)
+# # Use a separate scaler for y (target variable)
+# scaler_y_4 = StandardScaler()
+# y_train_scaled_4 = scaler_y_4.fit_transform(y_train_reshaped)  # Reshaped target variable for scaling
+# y_test_scaled_4 = scaler_y_4.transform(y_test_reshaped)
 
-# Train and Evaluate
-metrics_scenario_4 = {}
-best_models_scenario_4 = {}
-predictions_scenario_4 = {}
+# # Train and Evaluate
+# metrics_scenario_4 = {}
+# best_models_scenario_4 = {}
+# predictions_scenario_4 = {}
 
-# Initialize dictionaries to store results for the current category
-predictions_scenario_4_category = {}
-metrics_scenario_4_category = {}
+# # Initialize dictionaries to store results for the current category
+# predictions_scenario_4_category = {}
+# metrics_scenario_4_category = {}
 
-# Before fitting the model, ensure that X_label_onehot_train_scaled and y_train_scaled are of the same length
-assert len(X_label_onehot_train_scaled_4) == len(y_train_scaled_4), "Mismatch in the length of X_label_onehot_train_scaled and y_train_scaled"
+# # Before fitting the model, ensure that X_label_onehot_train_scaled and y_train_scaled are of the same length
+# assert len(X_label_onehot_train_scaled_4) == len(y_train_scaled_4), "Mismatch in the length of X_label_onehot_train_scaled and y_train_scaled"
 
-# Iterate over each model, perform GridSearchCV, and make predictions
-for name, model in models.items():
-    print(f"Training and predicting with {name}...")
+# # Iterate over each model, perform GridSearchCV, and make predictions
+# for name, model in models.items():
+#     print(f"Training and predicting with {name}...")
 
-    # Perform GridSearchCV to find the best parameters
-    grid_search_4 = GridSearchCV(estimator=model, param_grid=params[name], cv=5, n_jobs=-1, scoring='r2')
-    grid_search_4.fit(X_label_onehot_train_scaled_4, y_train_scaled_4)
+#     # Perform GridSearchCV to find the best parameters
+#     grid_search_4 = GridSearchCV(estimator=model, param_grid=params[name], cv=5, n_jobs=-1, scoring='r2')
+#     grid_search_4.fit(X_label_onehot_train_scaled_4, y_train_scaled_4)
     
-    # Store the best model
-    best_models_scenario_4[name] = grid_search_4.best_estimator_
+#     # Store the best model
+#     best_models_scenario_4[name] = grid_search_4.best_estimator_
     
-    # Make predictions on the test set
-    y_pred_scaled_4 = grid_search_4.predict(X_label_onehot_test_scaled_4)
+#     # Make predictions on the test set
+#     y_pred_scaled_4 = grid_search_4.predict(X_label_onehot_test_scaled_4)
         
-    # Inverse transform predictions back to original scale
-    y_pred_original_4 = scaler_y_4.inverse_transform(y_pred_scaled_4.reshape(-1, 1)).flatten()
-    y_test_original_4 = scaler_y_4.inverse_transform(y_test_scaled_4.reshape(-1, 1)).flatten()
+#     # Inverse transform predictions back to original scale
+#     y_pred_original_4 = scaler_y_4.inverse_transform(y_pred_scaled_4.reshape(-1, 1)).flatten()
+#     y_test_original_4 = scaler_y_4.inverse_transform(y_test_scaled_4.reshape(-1, 1)).flatten()
 
-    predictions_scenario_4[name] = y_pred_original_4
+#     predictions_scenario_4[name] = y_pred_original_4
 
-    # Calculate evaluation metrics
-    mse_scenario_4 = mean_squared_error(y_test_original_4, y_pred_original_4)
-    mae_scenario_4 = mean_absolute_error(y_test_original_4, y_pred_original_4)
-    r2_scenario_4 = r2_score(y_test_original_4, y_pred_original_4)
-    rmse_scenario_4 = np.sqrt(mse_scenario_4)
+#     # Calculate evaluation metrics
+#     mse_scenario_4 = mean_squared_error(y_test_original_4, y_pred_original_4)
+#     mae_scenario_4 = mean_absolute_error(y_test_original_4, y_pred_original_4)
+#     r2_scenario_4 = r2_score(y_test_original_4, y_pred_original_4)
+#     rmse_scenario_4 = np.sqrt(mse_scenario_4)
     
-    # Store the metrics
-    metrics_scenario_4[name] = {
-        'Algorithm' : name ,
-        'CrimeCategory': X_test_categories['CrimeCategory'],
-        'ProvinceCode': X_test_categories['ProvinceCode'],
-        'PoliceStationCode': X_test_categories['PoliceStationCode'],
-        'Quarter': X_test_categories['Quarter'],
-        'MSE': mse_scenario_4,
-        'MAE': mae_scenario_4,
-        'R²': r2_scenario_4,
-        'RMSE': rmse_scenario_4
-    }
+#     # Store the metrics
+#     metrics_scenario_4[name] = {
+#         'Algorithm' : name ,
+#         'CrimeCategory': X_test_categories['CrimeCategory'],
+#         'ProvinceCode': X_test_categories['ProvinceCode'],
+#         'PoliceStationCode': X_test_categories['PoliceStationCode'],
+#         'Quarter': X_test_categories['Quarter'],
+#         'MSE': mse_scenario_4,
+#         'MAE': mae_scenario_4,
+#         'R²': r2_scenario_4,
+#         'RMSE': rmse_scenario_4
+#     }
 
-    metrics_scenario_4_df = pd.DataFrame(metrics_scenario_4)
+#     metrics_scenario_4_df = pd.DataFrame(metrics_scenario_4)
 
-    # Display the metrics
-    print(f"Metrics Scenario 4 for {name}:")
-    print(f"  MSE: {mse_scenario_4}")
-    print(f"  MAE: {mae_scenario_4}")
-    print(f"  R²: {r2_scenario_4}")
-    print(f"  RMSE: {rmse_scenario_4}")
-    print("\n" + "-"*50 + "\n")
+#     # Display the metrics
+#     print(f"Metrics Scenario 4 for {name}:")
+#     print(f"  MSE: {mse_scenario_4}")
+#     print(f"  MAE: {mae_scenario_4}")
+#     print(f"  R²: {r2_scenario_4}")
+#     print(f"  RMSE: {rmse_scenario_4}")
+#     print("\n" + "-"*50 + "\n")
 
-    # Display predicted and true values for comparison
-    print(f"True vs Predicted Values for {name}:")
-    for i in range(len(y_test_original_4)):
-        print(f"True: {y_test_original_4[i]:.4f}, Predicted: {y_pred_original_4[i]:.4f}")
+#     # Display predicted and true values for comparison
+#     print(f"True vs Predicted Values for {name}:")
+#     for i in range(len(y_test_original_4)):
+#         print(f"True: {y_test_original_4[i]:.4f}, Predicted: {y_pred_original_4[i]:.4f}")
 
-    print("\n" + "="*50 + "\n")
+#     print("\n" + "="*50 + "\n")
 
-    predicted_values_4 = predictions_scenario_4[name] 
+#     predicted_values_4 = predictions_scenario_4[name] 
 
-    # Ensure 'predicted_values' is a list or a Series before creating the DataFrame
-    predicted_values_4 = pd.Series(predicted_values_4)
+#     # Ensure 'predicted_values' is a list or a Series before creating the DataFrame
+#     predicted_values_4 = pd.Series(predicted_values_4)
 
-    # Now create the DataFrame with all columns properly aligned
-    results_4_df = pd.DataFrame({
-        'Algorithm' : name ,
-        'CrimeCategory': X_test_categories['CrimeCategory'],
-        'ProvinceCode': X_test_categories['ProvinceCode'],
-        'PoliceStationCode': X_test_categories['PoliceStationCode'],
-        'Quarter': X_test_categories['Quarter'],
-        'TrueValue': y_test_scaled_4.flatten(),
-        'PredictedValue': predicted_values_4
-    })
+#     # Now create the DataFrame with all columns properly aligned
+#     results_4_df = pd.DataFrame({
+#         'Algorithm' : name ,
+#         'CrimeCategory': X_test_categories['CrimeCategory'],
+#         'ProvinceCode': X_test_categories['ProvinceCode'],
+#         'PoliceStationCode': X_test_categories['PoliceStationCode'],
+#         'Quarter': X_test_categories['Quarter'],
+#         'TrueValue': y_test_scaled_4.flatten(),
+#         'PredictedValue': predicted_values_4
+#     })
 
-    # Store predictions and metrics for the current category
-    # predictions_per_category_scenario_4[category] = predictions_scenario_3_category
-    # metrics_per_category_scenario_4[category] = metrics_scenario_3_category
+#     # Store predictions and metrics for the current category
+#     # predictions_per_category_scenario_4[category] = predictions_scenario_3_category
+#     # metrics_per_category_scenario_4[category] = metrics_scenario_3_category
 
-    # Store predictions and metrics for the current category
-    # predictions_per_category_scenario_4[category] = predictions_scenario_4_category
-    # metrics_per_category_scenario_3[category] = metrics_scenario_4_category
+#     # Store predictions and metrics for the current category
+#     # predictions_per_category_scenario_4[category] = predictions_scenario_4_category
+#     # metrics_per_category_scenario_3[category] = metrics_scenario_4_category
 
-    # ===================================================================================================
-with SplitScalerTab7:
-    with st.expander('Train and test split', expanded=False):
-        st.header(f'Input data for {algorithm} algorithm', divider='rainbow')
-        train_ratio = parameter_split_size
-        test_ratio = 100 - parameter_split_size
-        split_ration_value = f'{train_ratio} : {test_ratio}'
-        split_ration = f'Split Ration % Train\:Test'
+#     # ===================================================================================================
+# with SplitScalerTab7:
+#     with st.expander('Train and test split', expanded=False):
+#         st.header(f'Input data for {algorithm} algorithm', divider='rainbow')
+#         train_ratio = parameter_split_size
+#         test_ratio = 100 - parameter_split_size
+#         split_ration_value = f'{train_ratio} : {test_ratio}'
+#         split_ration = f'Split Ration % Train\:Test'
         
-        col = st.columns(5)
-        col[0].metric(label="No. of samples", value=X.shape[0], delta="")
-        col[1].metric(label="No. of X variables", value=X.shape[1], delta="")
-        col[2].metric(label="No. of Training samples", value=X_train.shape[0], delta="")
-        col[3].metric(label="No. of Test samples", value=X_test.shape[0], delta="")
-        col[4].metric(label= split_ration, value= split_ration_value, delta="")
+#         col = st.columns(5)
+#         col[0].metric(label="No. of samples", value=X.shape[0], delta="")
+#         col[1].metric(label="No. of X variables", value=X.shape[1], delta="")
+#         col[2].metric(label="No. of Training samples", value=X_train.shape[0], delta="")
+#         col[3].metric(label="No. of Test samples", value=X_test.shape[0], delta="")
+#         col[4].metric(label= split_ration, value= split_ration_value, delta="")
 
     
-    # Display the updated train and test splits
-    with st.expander('Train split : MinMaxScaler', expanded=False):
-        train_col = st.columns((3, 1))
-        with train_col[0]:
-            st.markdown('X_train')
-            st.dataframe(X_train_display, height=210, hide_index=True, use_container_width=True)
-        with train_col[1]:
-            st.markdown('y_train')
-            st.dataframe(y_train_scaled, height=210, hide_index=True, use_container_width=True)
+#     # Display the updated train and test splits
+#     with st.expander('Train split : MinMaxScaler', expanded=False):
+#         train_col = st.columns((3, 1))
+#         with train_col[0]:
+#             st.markdown('X_train')
+#             st.dataframe(X_train_display, height=210, hide_index=True, use_container_width=True)
+#         with train_col[1]:
+#             st.markdown('y_train')
+#             st.dataframe(y_train_scaled, height=210, hide_index=True, use_container_width=True)
 
-    with st.expander('Test split : MinMaxScaler', expanded=False):
-        test_col = st.columns((3, 1))
-        with test_col[0]:
-            st.markdown('X_test')
-            st.dataframe(X_test_display, height=210, hide_index=True, use_container_width=True)
-        with test_col[1]:
-            st.markdown('y_test')
-            st.dataframe(y_test_scaled, height=210, hide_index=True, use_container_width=True)
+#     with st.expander('Test split : MinMaxScaler', expanded=False):
+#         test_col = st.columns((3, 1))
+#         with test_col[0]:
+#             st.markdown('X_test')
+#             st.dataframe(X_test_display, height=210, hide_index=True, use_container_width=True)
+#         with test_col[1]:
+#             st.markdown('y_test')
+#             st.dataframe(y_test_scaled, height=210, hide_index=True, use_container_width=True)
 
-with EncodingTab8:
-    with st.expander(f'Predictions and Mertics: Interger Encoding', expanded=False):
-        st.header(f'Train :', divider='rainbow')
-        # st.dataframe(data_label_encoded_train, height=210, hide_index=True, use_container_width=True)
-        st.header(f'Test :', divider='rainbow')
+# with EncodingTab8:
+#     with st.expander(f'Predictions: Interger Encoding', expanded=False):
+#         st.header(f'Train :', divider='rainbow')
+#         st.dataframe(output_data, height=210, hide_index=True, use_container_width=True)
+#         st.header(f'Test :', divider='rainbow')
         # st.dataframe(data_label_encoded_test, height=210, hide_index=True, use_container_width=True)
 
-    with st.expander('Label encoding Data : PoliceStationCode and Quarter', expanded=False):
-        st.header(f'Label encoding X_Train', divider='rainbow')
-        st.dataframe(X_train_scaled_1, height=210, hide_index=True, use_container_width=True)
-        st.header(f'Label encoding X_Test', divider='rainbow')
-        st.dataframe(X_test_scaled_1, height=210, hide_index=True, use_container_width=True)
-        st.header(f'Label encoding y_Train', divider='rainbow')
-        st.dataframe(y_train_scaled_1 , height=210, hide_index=True, use_container_width=True)
-        st.header(f'Label encoding y_Test', divider='rainbow')
-        st.dataframe(y_test_scaled_1, height=210, hide_index=True, use_container_width=True)
+#     with st.expander('Label encoding Data : PoliceStationCode and Quarter', expanded=False):
+#         st.header(f'Label encoding X_Train', divider='rainbow')
+#         st.dataframe(X_train_scaled_1, height=210, hide_index=True, use_container_width=True)
+#         st.header(f'Label encoding X_Test', divider='rainbow')
+#         st.dataframe(X_test_scaled_1, height=210, hide_index=True, use_container_width=True)
+#         st.header(f'Label encoding y_Train', divider='rainbow')
+#         st.dataframe(y_train_scaled_1 , height=210, hide_index=True, use_container_width=True)
+#         st.header(f'Label encoding y_Test', divider='rainbow')
+#         st.dataframe(y_test_scaled_1, height=210, hide_index=True, use_container_width=True)
   
     # with st.expander('One-hot encoding Data : PoliceStationCode and Quarter', expanded=False):
     #     st.header(f'One-hot encoding Train', divider='rainbow')
@@ -1255,65 +1189,63 @@ with EncodingTab8:
     #     st.dataframe(data_onehot_label_encoded_test, height=210, hide_index=True, use_container_width=True)
 
 with RealTimePreditionsTab9:
-    # with st.expander(f'Predictions and Mertics: Interger Encoding', expanded=False):
-    #     #st.header(f'Train :', divider='rainbow')
-    #     #st.dataframe(predictions_scenario_1, height=210, hide_index=True, use_container_width=True)
-    #     st.header(f'Test :', divider='rainbow')
-    #     # st.dataframe(data_label_encoded_test, height=210, hide_index=True, use_container_width=True)
+    with st.expander(f'Predictions : Without Encoding', expanded=False):
+        st.header(f'Predictions and True values :', divider='rainbow')
+        st.dataframe(output_data, height=210, hide_index=True, use_container_width=True)
     
-    with st.expander(f'Predictions : Label encoding : PoliceStationCode and Quarter', expanded=False):
-        st.header(f'Train :', divider='rainbow')
-        st.dataframe(results_1_df, height=210, hide_index=True, use_container_width=True)
-        st.header(f'Test :', divider='rainbow')
-        # st.dataframe(data_label_encoded_test, height=210, hide_index=True, use_container_width=True)
+#     with st.expander(f'Predictions : Label encoding : PoliceStationCode and Quarter', expanded=False):
+#         st.header(f'Train :', divider='rainbow')
+#         st.dataframe(results_1_df, height=210, hide_index=True, use_container_width=True)
+#         st.header(f'Test :', divider='rainbow')
+#         # st.dataframe(data_label_encoded_test, height=210, hide_index=True, use_container_width=True)
 
-    with st.expander('Predictions : One-hot encoding Predictions : PoliceStationCode and Quarter', expanded=False):
-        st.header(f'Train :', divider='rainbow')
-        st.dataframe(results_2_df, height=210, hide_index=True, use_container_width=True)
-        st.header(f'Test :', divider='rainbow')
-        # st.dataframe(data_onehot_encoded_test, height=210, hide_index=True, use_container_width=True)
+#     with st.expander('Predictions : One-hot encoding Predictions : PoliceStationCode and Quarter', expanded=False):
+#         st.header(f'Train :', divider='rainbow')
+#         st.dataframe(results_2_df, height=210, hide_index=True, use_container_width=True)
+#         st.header(f'Test :', divider='rainbow')
+#         # st.dataframe(data_onehot_encoded_test, height=210, hide_index=True, use_container_width=True)
 
-    with st.expander('Predictions : Label encoding : PoliceStationCode and One-hot encoding : Quarter', expanded=False):
-        st.header(f'Train :', divider='rainbow')
-        st.dataframe(results_3_df, height=210, hide_index=True, use_container_width=True)
-        st.header(f'Test :', divider='rainbow')
-        # st.dataframe(data_label_onehot_encoded_test, height=210, hide_index=True, use_container_width=True) 
+#     with st.expander('Predictions : Label encoding : PoliceStationCode and One-hot encoding : Quarter', expanded=False):
+#         st.header(f'Train :', divider='rainbow')
+#         st.dataframe(results_3_df, height=210, hide_index=True, use_container_width=True)
+#         st.header(f'Test :', divider='rainbow')
+#         # st.dataframe(data_label_onehot_encoded_test, height=210, hide_index=True, use_container_width=True) 
          
-    with st.expander('Predictions : One-hot encoding: PoliceStationCode and Label encoding : Quarter', expanded=False):
-        st.header(f'Train :', divider='rainbow')
-        st.dataframe(results_4_df, height=210, hide_index=True, use_container_width=True)
-        st.header(f'Test :', divider='rainbow')
-        # st.dataframe(data_onehot_label_encoded_test, height=210, hide_index=True, use_container_width=True)  
+#     with st.expander('Predictions : One-hot encoding: PoliceStationCode and Label encoding : Quarter', expanded=False):
+#         st.header(f'Train :', divider='rainbow')
+#         st.dataframe(results_4_df, height=210, hide_index=True, use_container_width=True)
+#         st.header(f'Test :', divider='rainbow')
+#         # st.dataframe(data_onehot_label_encoded_test, height=210, hide_index=True, use_container_width=True)  
 
 with RealTimeMetricsTab10:
-    # with st.expander(f'Predictions and Mertics: Interger Encoding', expanded=False):
-    #     st.header(f'Train :', divider='rainbow')
-    #     st.dataframe(results_4_df, height=210, hide_index=True, use_container_width=True)
-    #     st.header(f'Test :', divider='rainbow')
-    #     # st.dataframe(data_label_encoded_test, height=210, hide_index=True, use_container_width=True)
-
-    with st.expander(f'Metrics : Label encoding : PoliceStationCode and Quarter', expanded=False):
+    with st.expander(f'Mertics: Without Encoding', expanded=False):
         st.header(f'Train :', divider='rainbow')
-        st.dataframe(metrics_scenario_1_df, height=210, hide_index=True, use_container_width=True)
+        st.dataframe(output_mertics, height=210, hide_index=True, use_container_width=True)
         st.header(f'Test :', divider='rainbow')
         # st.dataframe(data_label_encoded_test, height=210, hide_index=True, use_container_width=True)
 
-    with st.expander('Mertics: One-hot encoding Predictions : PoliceStationCode and Quarter', expanded=False):
-        st.header(f'Train :', divider='rainbow')
-        st.dataframe(metrics_scenario_2_df, height=210, hide_index=True, use_container_width=True)
-        st.header(f'Test :', divider='rainbow')
-        # st.dataframe(data_onehot_encoded_test, height=210, hide_index=True, use_container_width=True)
+#     with st.expander(f'Metrics : Label encoding : PoliceStationCode and Quarter', expanded=False):
+#         st.header(f'Train :', divider='rainbow')
+#         st.dataframe(metrics_scenario_1_df, height=210, hide_index=True, use_container_width=True)
+#         st.header(f'Test :', divider='rainbow')
+#         # st.dataframe(data_label_encoded_test, height=210, hide_index=True, use_container_width=True)
 
-    with st.expander('Mertics : Label encoding : PoliceStationCode and One-hot encoding : Quarter', expanded=False):
-        st.header(f'Train :', divider='rainbow')
-        st.dataframe(metrics_scenario_3_df, height=210, hide_index=True, use_container_width=True)
-        st.header(f'Test :', divider='rainbow')
-        # st.dataframe(data_label_onehot_encoded_test, height=210, hide_index=True, use_container_width=True) 
+#     with st.expander('Mertics: One-hot encoding Predictions : PoliceStationCode and Quarter', expanded=False):
+#         st.header(f'Train :', divider='rainbow')
+#         st.dataframe(metrics_scenario_2_df, height=210, hide_index=True, use_container_width=True)
+#         st.header(f'Test :', divider='rainbow')
+#         # st.dataframe(data_onehot_encoded_test, height=210, hide_index=True, use_container_width=True)
+
+#     with st.expander('Mertics : Label encoding : PoliceStationCode and One-hot encoding : Quarter', expanded=False):
+#         st.header(f'Train :', divider='rainbow')
+#         st.dataframe(metrics_scenario_3_df, height=210, hide_index=True, use_container_width=True)
+#         st.header(f'Test :', divider='rainbow')
+#         # st.dataframe(data_label_onehot_encoded_test, height=210, hide_index=True, use_container_width=True) 
          
-    with st.expander('Mertics : One-hot encoding: PoliceStationCode and Label encoding : Quarter', expanded=False):
-        st.header(f'Train :', divider='rainbow')
-        st.dataframe(metrics_scenario_4_df, height=210, hide_index=True, use_container_width=True)
-        st.header(f'Test :', divider='rainbow')
-        # st.dataframe(data_onehot_label_encoded_test, height=210, hide_index=True, use_container_width=True) 
+#     with st.expander('Mertics : One-hot encoding: PoliceStationCode and Label encoding : Quarter', expanded=False):
+#         st.header(f'Train :', divider='rainbow')
+#         st.dataframe(metrics_scenario_4_df, height=210, hide_index=True, use_container_width=True)
+#         st.header(f'Test :', divider='rainbow')
+#         # st.dataframe(data_onehot_label_encoded_test, height=210, hide_index=True, use_container_width=True) 
     
 
