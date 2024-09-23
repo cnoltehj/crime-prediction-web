@@ -36,7 +36,7 @@ from sklearn.metrics import (
 )
 from math import sqrt
 from sklearn.model_selection import GridSearchCV
-from sklearn.preprocessing import LabelEncoder, OneHotEncoder, MinMaxScaler
+from sklearn.preprocessing import LabelEncoder, OneHotEncoder, MinMaxScaler , StandardScaler
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -148,40 +148,6 @@ with AboutTab1:
 
             st.subheader('3. Learning Parameters')
             with st.expander('See parameters', expanded=False):
-
-                # if algorithm in ['RFM' , 'XGBoost']:
-                #     parameter_n_estimators = st.slider('Number of estimators (n_estimators)', 10, 50, 100)  #1000
-                
-                # if algorithm in ['RFM' , 'XGBoost']:
-                #     # st.subheader('4. General Parameters')
-                #     # with st.expander('See parameters', expanded=False):
-                #     parameter_random_state = st.slider('Seed number (random_state)', 0, 1000, 42, 1)
-
-                # if algorithm == 'RFM':
-                #         parameter_max_features = st.select_slider('Max features (max_features)', options=['sqrt', 'log2'])
-                #         parameter_min_samples_split = st.slider('Minimum number of samples required to split an internal node (min_samples_split)', 1, 2, 5, 10)
-                #         parameter_min_samples_leaf = st.slider('Minimum number of samples required to be at a leaf node (min_samples_leaf)', 1, 10, 2, 1)
-                #         parameter_criterion = st.select_slider('Performance measure (criterion)', options=['squared_error', 'absolute_error', 'friedman_mse', 'poisson'])
-                #         parameter_bootstrap = st.select_slider('Bootstrap samples when building trees (bootstrap)', options=[True, False])
-                #         parameter_oob_score = st.select_slider('Whether to use out-of-bag samples to estimate the R^2 on unseen data (oob_score)', options=[False, True])
-                # elif algorithm == 'ANN (MLPRegressor)':
-                #         parameter_hidden_layer_size = st.select_slider('Hidden layers size is the  number of neorons in each hidden layer (hidden_layer_size)', options=[(50, 50), (100,)])
-                #         parameter_solver = st.select_slider('Solver for weight optimization (solver) ', options=['adam', 'sgd'])
-                #         parameter_activation = st.select_slider('Activation function for the hidden layer (activation)', options=['tanh', 'relu'])
-                # elif algorithm == 'KNN':
-                #         parameter_n_neighbors = st.select_slider('Number of neighbors to use (n_neighbors )', options= [3, 5, 7])
-                #         parameter_weights = st.select_slider('Weight function used in prediction (weights)', options=['uniform', 'distance'])
-                # elif algorithm == 'SVR':
-                #         parameter_kernel = st.select_slider('Specifies the kernel type to be (kernel)', options=['linear', 'rbf'])
-                #         parameter_C = st.select_slider('Regularization parameter (C)', options=[1,10])
-                #         parameter_epsilon = st.select_slider('Epsilon in the epsilon-SVR (epsilon)', options=[0.1 , 0.2])
-                # elif algorithm == 'XGBoost':
-                #         parameter_learning_rate = st.select_slider('Boosting learning rate (learning_rate)', options=[0.01, 0.1])
-                #         parameter_max_depth = st.select_slider('Maximum depth of a tree (max_depth)', options=[3,5,7])
-                #         parameter_min_child_weight = st.select_slider('Minimum sum of instance weight (hessian) needed in a child (min_child_weight)', options=[1,3])
-                #         parameter_subsample = st.select_slider('Subsample ratio of the training instances (subsample)', options=[0.8, 1.0])
-                #         parameter_cosample_bytree = st.select_slider('Subsample ratio of columns when constructing each tree (cosample_bytree)', options=[0.8, 1.0])
-
                 sleep_time = st.slider('Sleep time', 0, 3, 0)
 
         if not df_crime_data_db.empty:
@@ -366,6 +332,8 @@ with Transformationtab6:
         # Display the graph in Streamlit
         st.pyplot(plt)
 
+# 1. Increase max_iter
+max_iter_value = 1000  # Increase this value if necessary
 
 # Initialize models and parameter grid
 models = {
@@ -373,22 +341,42 @@ models = {
     'SVR': SVR(),
     'XGBR': XGBRegressor(),
     'KNNR': KNeighborsRegressor(),
-    'MLPR': MLPRegressor(2000)
-}
+    'MLPR': MLPRegressor(max_iter=1000)
+ }
 
 params = {
-    'RFM': {'n_estimators': [100, 200], 'max_depth': [None, 10, 20]},
-    'SVR': {'C': [1, 10], 'kernel': ['linear', 'rbf']},
-    'XGBR': {'n_estimators': [100, 200], 'learning_rate': [0.01, 0.1], 'max_depth': [3, 5]},
-    'KNNR': {'n_neighbors': [5, 10], 'weights': ['uniform', 'distance']},
-    'MLPR': {
-        'hidden_layer_sizes': [(100,), (100, 50)],
-        'activation': ['relu', 'tanh'],
-        'learning_rate_init': [0.0001, 0.001, 0.01],
-        'max_iter': [500, 1000, 2000],  # Increase max_iter to allow more iterations
-        'solver': ['adam', 'lbfgs']
-    }
+    'RFM': {'n_estimators': [100], 'max_depth': [10,]},
+    'SVR': {'C': [1, 10], 'kernel': ['linear']},  
+    'XGBR': {'n_estimators': [100], 'learning_rate': [0.01], 'max_depth': [3]},  
+    'KNNR': {'n_neighbors': [5], 'weights': ['uniform']},  
+    'MLPR': MLPRegressor(hidden_layer_sizes=(100,),  # Simplified to one layer with 100 neurons
+                         activation='relu',
+                         solver='adam',  # Use Adam solver instead of lbfgs
+                         learning_rate_init=0.001,
+                         max_iter=max_iter_value)
 }
+
+    # 'RFM': {'n_estimators': [100], 'max_depth': [10,]},
+
+
+ # 'MLPR': MLPRegressor(hidden_layer_sizes=(100,),  # Simplified to one layer with 100 neurons
+    #                      activation='relu',
+    #                      solver='adam',  # Use Adam solver instead of lbfgs
+    #                      learning_rate_init=0.001,
+    #                      max_iter=max_iter_value,
+    #                      random_state=42)
+
+      # Reduced options
+    # 'SVR': {'C': [1, 10], 'kernel': ['linear']},  # Reduced kernel options
+    # 'XGBR': {'n_estimators': [100], 'learning_rate': [0.01], 'max_depth': [3]},  # Simplified
+    # 'KNNR': {'n_neighbors': [5], 'weights': ['uniform']},  # Simplified
+    # 'MLPR': MLPRegressor(hidden_layer_sizes=(100,),  # Simplified to one layer with 100 neurons
+    #                      activation='relu',
+    #                      solver='adam',  # Use Adam solver instead of lbfgs
+    #                      learning_rate_init=0.001,
+    #                      max_iter=max_iter_value,
+    #                      random_state=42)
+    # }
 
 def evaluate_metrics(y_true, y_pred):
         metrics_list = {
@@ -428,8 +416,16 @@ df_wide = replace_non_finite_with_median(df_cleaned)
 
 # B - Defining feature set X (years 2016-2023) and target y (2024 prediction) =====
 # We exclude 'CrimeCategory', 'ProvinceCode', 'PoliceStationCode', 'Quarter' as these are categorical
+features = [col for col in df_wide.columns if col not in ['CrimeCategory', 'ProvinceCode', 'Quarter', '2023']]
+
 X = df_wide[['2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023']]
 y = df_wide['2023']  # Using 2023 as a proxy for training, predicting 2024
+
+   # # Adjust the feature set to include the encoded columns as necessary
+    # features = [col for col in df_encoded.columns if col not in ['CrimeCategory', 'ProvinceCode', 'Quarter', '2023']]
+    
+    # X = df_encoded[features]
+    # y = df_encoded['2023']
 
 # C - Splitting the dataset into train/test sets (use 2016-2023 data for training) =====
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
@@ -442,6 +438,11 @@ X_train_display = pd.DataFrame(X_test, columns=X.columns)
 scaler_X = MinMaxScaler()
 X_train_scaled = scaler_X.fit_transform(X_train)
 X_test_scaled = scaler_X.transform(X_test)
+
+# # 2. Standardize/Scale the data
+# scaler = StandardScaler()
+# X_train_scaled = scaler.fit_transform(X_train)
+# X_test_scaled = scaler.transform(X_test)
 
 # predictions = {}
 
@@ -492,11 +493,82 @@ X_test_scaled = scaler_X.transform(X_test)
 #     output_mertics[f'MSE_{name}'] = pd.Series(results['MSE'], index=y_test.index)
 
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# Function to replace non-finite and NaN values with the median
+
+    # Function to replace non-finite and NaN values with the median
 def replace_non_finite_with_median(df):
     df.replace([np.inf, -np.inf], np.nan, inplace=True)
     df = df.apply(lambda x: x.fillna(x.median()) if np.issubdtype(x.dtype, np.number) else x)
     return df
+
+# Function to ensure consistent data types across DataFrame
+def ensure_consistent_dtypes(df):
+    for col in df.columns:
+        if pd.api.types.is_numeric_dtype(df[col]):
+            df[col] = df[col].astype('float64')
+        else:
+            try:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+                df[col] = df[col].astype('float64')
+            except ValueError:
+                pass
+    return df
+
+# # Function to revert 'PoliceStationCode', 'Quarter' and 'ProvinceCode' to their original values
+# def revert_labels(df, original_df):
+#     df['PoliceStationCode'] = original_df['Original_PoliceStationCode']
+#     df['Quarter'] = original_df['Original_Quarter']
+#     df['ProvinceCode'] = original_df['Original_ProvinceCode']
+#     return df
+
+# Function to train and predict per scenario and algorithm
+def train_and_predict(df, models, params, scenario_func, scenario_name, original_df):
+    df_encoded = scenario_func(df.copy())
+    
+    features = [col for col in df_encoded.columns if col not in ['CrimeCategory', 'ProvinceCode', 'PoliceStationCode', 'Quarter', '2023']]
+    
+    predictions = []
+    metrics = []
+
+    for name, model in models.items():
+        grid_search = GridSearchCV(model, params[name], cv=5, n_jobs=-1, scoring='neg_mean_squared_error')
+        grid_search.fit(X_train_scaled, y_train)
+
+        best_model = grid_search.best_estimator_
+        y_pred = best_model.predict(X_test_scaled)
+        
+        # Adjust the length of the predictions DataFrame to match the test set
+        scenario_predictions = pd.DataFrame({
+            'CrimeCategory': original_df.loc[y_test.index, 'CrimeCategory'].values,
+            'ProvinceCode': original_df.loc[y_test.index, 'ProvinceCode'].values,
+            'PoliceStationCode': original_df.loc[y_test.index, 'PoliceStationCode'].values,
+            'Quarter': original_df.loc[y_test.index, 'Quarter'].values,
+            'Algorithm': [name] * len(y_test),
+            'Scenario': [scenario_name] * len(y_test),
+            'Prediction': y_pred,
+            'True_value': y_test
+        })
+
+        # Revert 'PoliceStationCode' and 'Quarter' to original values
+        #scenario_predictions = revert_labels(scenario_predictions, original_df.loc[y_test.index])
+
+        # Store metrics with algorithm and scenario name
+        scenario_metrics = pd.DataFrame({
+            'Algorithm': [name],
+            'Scenario': [scenario_name] ,
+            'MAE': [mean_absolute_error(y_test, y_pred)],
+            'MSE': [mean_squared_error(y_test, y_pred)],
+            'R²': [r2_score(y_test, y_pred)],
+            'MAPE': [mean_absolute_percentage_error(y_test, y_pred)],
+            'ARS': [adjusted_rand_score(y_test, y_pred)]
+        })
+
+        predictions.append(scenario_predictions)
+        metrics.append(scenario_metrics)
+
+    predictions_df = pd.concat(predictions, axis=0).reset_index(drop=True)
+    metrics_df = pd.concat(metrics, axis=0).reset_index(drop=True)
+
+    return predictions_df, metrics_df
 
 # Scenario functions
 def scenario_1(df):
@@ -531,95 +603,78 @@ def scenario_4(df):
     df = pd.concat([df, encoded_df], axis=1).drop(['PoliceStationCode'], axis=1)
     return df
 
-# Train and predict function
-def train_and_predict(df, models, params, scenario_func):
-    df_encoded = scenario_func(df.copy())
-    
-    # Adjust the feature set to include the encoded columns as necessary
-    features = [col for col in df_encoded.columns if col not in ['CrimeCategory', 'ProvinceCode', 'Quarter', '2023']]
-    
-    X = df_encoded[features]
-    y = df_encoded['2023']
+# Initialize models and parameter grid
+models = {
+    'RFM': RandomForestRegressor(),
+    'SVR': SVR(),
+    'XGBR': XGBRegressor(),
+    'KNNR': KNeighborsRegressor(),
+    'MLPR': MLPRegressor()
+}
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+params = {
+    'RFM': {'n_estimators': [100, 200], 'max_depth': [None, 10, 20]},
+    'SVR': {'C': [1, 10], 'kernel': ['linear', 'rbf']},
+    'XGBR': {'n_estimators': [100, 200], 'learning_rate': [0.01, 0.1], 'max_depth': [3, 5]},
+    'KNNR': {'n_neighbors': [5, 10], 'weights': ['uniform', 'distance']},
+    'MLPR': {'hidden_layer_sizes': [(100,), (100, 50)], 'activation': ['relu', 'tanh'],'learning_rate_init': [0.001, 0.01],'max_iter': [500, 1000],'solver': ['adam', 'lbfgs']}
+}
 
-    scaler_X = MinMaxScaler()
-    X_train_scaled = scaler_X.fit_transform(X_train)
-    X_test_scaled = scaler_X.transform(X_test)
+# Replace non-finite and NaN values with median
+df_cleaned = replace_non_finite_with_median(df_replace_outliers)
 
-    predictions = []
-    metrics = []
+# # Save original values for later
+# df_cleaned['Original_PoliceStationCode'] = df_cleaned['PoliceStationCode']
+# df_cleaned['Original_Quarter'] = df_cleaned['Quarter']
+# df_cleaned['Original_ProvinceCode'] = df_cleaned['ProvinceCode']
 
-    for name, model in models.items():
-        grid_search = GridSearchCV(model, params[name], cv=5, n_jobs=-1, scoring='neg_mean_squared_error')
-        grid_search.fit(X_train_scaled, y_train)
-        best_model = grid_search.best_estimator_
-        y_pred = best_model.predict(X_test_scaled)
+# Prepare train/test data
+X = df_cleaned[['2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023']]
+y = df_cleaned['2023']
 
-        # Collect predictions
-        prediction_result = {
-            'Model': name,
-            'Prediction': y_pred,
-            'True_value': y_test.values
-        }
-        predictions.append(prediction_result)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-        # Calculate metrics
-        metric_result = {
-            'Model': name,
-            'MAE': mean_absolute_error(y_test, y_pred),
-            'MSE': mean_squared_error(y_test, y_pred),
-            'R²': r2_score(y_test, y_pred),
-            'MAPE': mean_absolute_percentage_error(y_test, y_pred),
-            'ARS': adjusted_rand_score(y_test, y_pred)  # Though typically for clustering, included as requested
-        }
-        metrics.append(metric_result)
-
-    return pd.DataFrame(predictions), pd.DataFrame(metrics)
+scaler_X = MinMaxScaler()
+X_train_scaled = scaler_X.fit_transform(X_train)
+X_test_scaled = scaler_X.transform(X_test)
 
 # Run scenarios
-scenario_funcs = [scenario_1, scenario_2, scenario_3, scenario_4]
-all_predictions = []
-all_metrics = []
+scenario_funcs = {
+    "Scenario 1": scenario_1,
+    "Scenario 2": scenario_2,
+    "Scenario 3": scenario_3,
+    "Scenario 4": scenario_4
+}
 
-for scenario_func in scenario_funcs:
-    scenario_predictions, scenario_metrics = train_and_predict(df_cleaned, models, params, scenario_func)
-    all_predictions.append(scenario_predictions)
-    all_metrics.append(scenario_metrics)
-
-# Concatenate all predictions and metrics
-final_predictions = pd.concat(all_predictions, axis=0).reset_index(drop=True)
-final_metrics = pd.concat(all_metrics, axis=0).reset_index(drop=True)
-
-# Add categorical columns for reference
-final_predictions = pd.concat([df_cleaned[['CrimeCategory', 'ProvinceCode', 'PoliceStationCode', 'Quarter']].reset_index(drop=True), final_predictions], axis=1)
-final_metrics = pd.concat([df_cleaned[['CrimeCategory', 'ProvinceCode', 'PoliceStationCode', 'Quarter']].reset_index(drop=True), final_metrics], axis=1)
-
-# Display predictions and metrics in Streamlit
-st.dataframe(final_predictions, height=300, use_container_width=True)
-st.dataframe(final_metrics, height=300, use_container_width=True)
-                   
+for scenario_name, scenario_func in scenario_funcs.items():
+    st.subheader(f"Results for {province_code_value} :  {scenario_name} ")
+    
+    for name in models.keys():
+        scenario_predictions, scenario_metrics = train_and_predict(df_cleaned, {name: models[name]}, {name: params[name]}, scenario_func, scenario_name, df_cleaned)
+        
+        # Display predictions and metrics for each algorithm and scenario
+        st.markdown(f"### Predictions for {name} under {scenario_name}")
+        st.dataframe(scenario_predictions, height=300, use_container_width=True)
+        
+        st.markdown(f"### Metrics for {name} under {scenario_name}")
+        st.dataframe(scenario_metrics.head(1), height=50, use_container_width=True)               
 
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 with RealTimePreditionsTab9:
-    with st.expander(f'Predictions : Without Encoding', expanded=False):
-        st.header(f'Predictions and True values :', divider='rainbow')
-        st.dataframe(df_cleaned, height=210, hide_index=True, use_container_width=True)
+    with st.expander(f'Trained scaled', expanded=False):
+        st.header(f'Scaled :', divider='rainbow')
+        st.dataframe(X_train_scaled, height=210, hide_index=True, use_container_width=True)
 
-    with st.expander(f'Predictions : With Encoding', expanded=False):
-        st.header(f'Predictions and True values :', divider='rainbow')
-        st.dataframe(df_wide, height=210, hide_index=True, use_container_width=True)
+    # with st.expander(f'Predictions : With Encoding', expanded=False):
+    #     st.header(f'Predictions and True values :', divider='rainbow')
+    #     st.dataframe(df_wide, height=210, hide_index=True, use_container_width=True)
 
-with RealTimeMetricsTab10:
-    with st.expander(f'Mertics: Without Encoding', expanded=False):
-        st.header(f'Train :', divider='rainbow')
-        st.dataframe(predictions, height=210, hide_index=True, use_container_width=True)
-
-    with st.expander(f'Mertics: Encoding', expanded=False):
-        st.header(f'Train :', divider='rainbow')
-        st.dataframe(final_predictions, height=210, hide_index=True, use_container_width=True)
-        st.header(f'Test :', divider='rainbow')
-        st.dataframe(final_metrics, height=210, hide_index=True, use_container_width=True)
+# with RealTimeMetricsTab10:
+#     with st.expander(f'Mertics: Encoding', expanded=False):
+#         st.header(f'Train :', divider='rainbow')
+#         st.dataframe(final_predictions, height=210, hide_index=True, use_container_width=True)
+#         st.header(f'Test :', divider='rainbow')
+#         st.dataframe(final_metrics, height=210, hide_index=True, use_container_width=True)
 
 
