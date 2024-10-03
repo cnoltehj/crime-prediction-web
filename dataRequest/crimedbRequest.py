@@ -93,6 +93,52 @@ def fetch_policestation_per_provinces(provincecode: str):
     
     return pd.DataFrame()  # Return an empty DataFrame if there's an error
 
+def fetch_predition_province_policestation_year_quarterly_algorithm(provincecode: str, policestationcode: str, quarter: str,  algorithm: str):
+       
+    endpoint = f"{config.BaseUrl_fetch_predition_province_policestation_quarterly_algorithm}provincecode={provincecode}&policestationcode={policestationcode}&quarter={quarter}&algorithm={algorithm}"
+      
+    try:
+        response = requests.get(endpoint)
+        response.raise_for_status()  # Raise an exception for HTTP errors
+        data = response.json()  # Get the JSON data
+        
+        # Print the API response for debugging purposes
+        print("API response:", data)
+        
+        # Check if the data is in the expected format (list of dictionaries)
+        if isinstance(data, list):
+            # Convert the JSON data to a DataFrame
+            df = pd.DataFrame(data)
+
+             # Ensure 'CrimeCategory', 'ProvinceName', and 'StationName' are treated as strings and handle None values
+            df['Algorithm'] = df['Algorithm'].astype(str)
+            df['CrimeCategoryCode'] = df['CrimeCategoryCode'].astype(str)
+            df['CrimeTypeName'] = df['CrimeTypeName'].astype(str)
+            df['ProvinceCode'] = df['ProvinceCode'].astype(str)
+            df['PoliceStationCode'] = df['PoliceStationCode'].astype(str)
+            df['StationName'] = df['StationName'].astype(str)
+
+            # Ensure numeric columns are converted to floats, except for specified columns
+            for col in df.columns:
+                if col not in ['Algorithm','CrimeCategoryCode', 'ProvinceCode', 'CrimeTypeName','ProvinceCode','PoliceStationCode','StationName']:  # Skip the specified columns
+                    df[col] = pd.to_numeric(df[col], errors='coerce')  # Convert to numeric, coercing errors to NaN
+
+            return df
+        else:
+            print("Unexpected data format received from the API. Data is not a list.")
+            return pd.DataFrame()  # Return an empty DataFrame if the data format is unexpected
+    
+    except requests.exceptions.HTTPError as errh:
+        print(f"HTTP Error: {errh}")
+    except requests.exceptions.ConnectionError as errc:
+        print(f"Error Connecting: {errc}")
+    except requests.exceptions.Timeout as errt:
+        print(f"Timeout Error: {errt}")
+    except requests.exceptions.RequestException as err:
+        print(f"Error: {err}")
+    
+    return pd.DataFrame()  # Return an empty DataFrame if there's an error
+ 
 def fetch_stats_province_policestation(provincecode: str, policestationcode: str, quarter: int):
        
     endpoint = f"{config.BaseUrl_fetch_stats_province_policestation}provincecode={provincecode}&policestationcode={policestationcode}"

@@ -19,7 +19,7 @@ from dataRequest.crimedbRequest import (
     fetch_all_provinces,
     fetch_policestation_per_provinces,
     fetch_stats_province_policestation,
-    fetch_prediction_province_policestation,
+    fetch_predition_province_policestation_year_quarterly_algorithm,
     fetch_suggest_stats_province_policestation,
     fetch_stats_policestation_per_province
     )
@@ -117,34 +117,20 @@ with AboutTab1:
                     # Ensure the index is within the valid range
                     valid_index = min(0, len(df_policestations) - 1)
 
-                    police_station_name = st.selectbox('Select Police Station', df_policestations['StationName'], format_func=lambda x: x, index=valid_index)
+                    police_station_name = st.selectbox('Select Police Station', df_policestations['StationName'], format_func=lambda x: x, index=2)
                     police_code_value = df_policestations[df_policestations['StationName'] == police_station_name]['StationCode'].values[0]
                     year_mapping = st.slider('Select year range from 2016 - 2023', 2023, 2016)
                     quarter_value = st.radio('Select quarter of year', options=[1, 2, 3, 4], index=0)
                     df_province_policestation_quarterly_data_db = fetch_stats_province_policestation(province_code_value, police_code_value, quarter_value)
-                    df_fetch_prediction_province_policestation_data_db = fetch_prediction_province_policestation()
-
                     df_suggeted_province_quarterly_data_db = fetch_stats_policestation_per_province(province_code_value,quarter_value)
                     df_suggeted_province_policestation_quarterly_data_db = fetch_suggest_stats_province_policestation(province_code_value,police_code_value)
-
-            #if set_development_mode:
-
-                # visualise_initail_median = st.toggle('Display initial median values')
-            st.markdown('**1.2. Identify outliers**')
-            identify_outlier = st.toggle('Identify outliers')
-
-            # if identify_outlier:
-            df_identify_outliers_db = identify_outliers_data(df_suggeted_province_quarterly_data_db)
-
-            st.markdown('**1.3. Replace outliers with median**')
-            replace_outlier = st.toggle('Replace with Median')
-
-            st.markdown('**1.4. Set Test and Train Parameters**')
-            parameter_split_size = st.slider('Data split ratio (% for Training Set)', 10, 90, 80, 5)
-
+   
             st.subheader('2. Select Algorithm')
             with st.expander('Algorithms'):
-                algorithm = st.radio('', options=['ANN (MLPRegressor)', 'KNN', 'RFM', 'SVR','XGBoost'], index=2)
+                algorithm = st.radio('', options=['ANN (MLPRegressor)', 'KNN', 'RFM', 'SVR','XGBoost'], index=4)
+                
+            st.markdown('**1.4. Set Test and Train Parameters**')
+            parameter_split_size = st.slider('Data split ratio (% for Training Set)', 10, 90, 80, 5)
 
             st.subheader('3. Learning Parameters')
             with st.expander('See parameters', expanded=False):
@@ -162,31 +148,10 @@ with AboutTab1:
                 # Initialize empty lists for metrics and crime categories
                 crime_categories_list = df_crime_data_db['CrimeCategory'].tolist()
 
-    if not set_development_mode:
-        with st.expander(f'Prediction Values', expanded=False):
-            visualise_prediction = st.toggle('Prediction Values dataset')
-            st.dataframe(df_fetch_prediction_province_policestation_data_db, height=280, use_container_width=True)
-            df_predtions_melt = df_fetch_prediction_province_policestation_data_db.melt(id_vars=['CrimeCategory'], var_name='Year', value_name='Percentage')
-
-            if visualise_prediction:
-                # Create the graph using seaborn
-                plt.figure(figsize=(10, 6))
-                sns.lineplot(data=df_predtions_melt, x='Year', y='Percentage', hue='CrimeCategory', marker='o')
-                plt.title('Crime Trends Over the Years')
-                plt.legend(title='Crime Category', bbox_to_anchor=(1.05, 1), loc='upper left')
-                plt.xticks(rotation=45)
-
-                        # Annotate each data point with its value
-                for i in range(df_predtions_melt.shape[0]):
-                    plt.text(df_predtions_melt['Year'].iloc[i], df_predtions_melt['Percentage'].iloc[i],
-                    f"{df_predtions_melt['Percentage'].iloc[i]:.2f}", color='black', ha='right', va='bottom')
-
-                # Display the graph in Streamlit
-                st.pyplot(plt)
 with DataExplorationTab2:
     with st.expander(f'Initial dataset', expanded=False):
         visualise_initialdate = st.toggle('Visualise initial dataset')
-        st.dataframe(df_suggeted_province_quarterly_data_db.sort_values(by='PoliceStationCode'), height=280, use_container_width=True)
+        st.dataframe(df_suggeted_province_quarterly_data_db.sort_values(by='PoliceStationCode'))
 
         # Melting the DataFrame to get a tidy format
         df_initial_data_melt = df_suggeted_province_quarterly_data_db.melt(
@@ -194,9 +159,6 @@ with DataExplorationTab2:
             var_name='Year',
             value_name='Percentage'
         )
-
-        # Setting crime data DataFrame
-        #df_crime_data_db = df_suggeted_province_quarterly_data_db.sort_values(by='df_identify_outliers_db_sort')
 
         if visualise_initialdate:
             # Create the graph using seaborn
@@ -224,16 +186,138 @@ with DataExplorationTab2:
 
     #if set_development_mode:
 with PreditionsTab3:
-    with st.expander('Best Predictions', expanded=False):
-        performance_col = st.columns((2, 0.2, 3))
+        with st.expander(f'Prediction Values', expanded=False):
+            performance_col = st.columns((2, 0.2, 3))
+
+            with performance_col[0]:
+                st.header('Predictions', divider='rainbow')
+                
+                # Fetch data from the API
+                df_fetch_predition_province_policestation_year_quarterly_algorithm_data_db = fetch_predition_province_policestation_year_quarterly_algorithm(province_code_value, police_code_value, quarter_value, algorithm)
+
+                # Check if the API response is valid
+                if df_fetch_predition_province_policestation_year_quarterly_algorithm_data_db is not None:
+                # Create DataFrame from the API response
+                    df_prediction_ui = pd.DataFrame(df_fetch_predition_province_policestation_year_quarterly_algorithm_data_db)
+    
+                # Check if DataFrame is empty
+                if not df_prediction_ui.empty:
+                # Display the DataFrame, ensuring it shows all columns
+                    st.dataframe(df_prediction_ui, height=280, use_container_width=True)
+                else:
+                    st.write("API call returned None. Please check the API.")
+
+                # Plot box plot of the data with outliers replaced
+            with performance_col[2]:
+                #st.header('Predictions plot', divider='rainbow')
+                # Header for the first section
+                st.header('Predictions vs True_Value Bar Plot', divider='rainbow')
+
+                # Bar plot for Prediction vs True_Value
+                bar_width = 0.35
+                index = range(len(df_prediction_ui))
+
+                # Create the bar plot
+                fig, ax = plt.subplots()
+                bar1 = ax.bar(index, df_prediction_ui['Prediction'], bar_width, label='Prediction', color='b')
+                bar2 = ax.bar([i + bar_width for i in index], df_prediction_ui['True_Value'], bar_width, label='True Value', color='r')
+
+                ax.set_xlabel('Crime Types')
+                ax.set_ylabel('Counts')
+                ax.set_title('Prediction vs True Value')
+                ax.set_xticks([i + bar_width / 2 for i in index])
+                ax.set_xticklabels(df_prediction_ui['CrimeTypeName'], rotation=45, ha='right')
+                ax.legend()
+
+                # Display the bar plot in Streamlit
+                st.pyplot(fig)
+
+                st.markdown("---")  # Creates a horizontal line for separation
+
+                st.header('Predictions vs True_Value for CrimeTypeName Line Plot', divider='rainbow')
+
+                # Create the line plot
+                fig, ax = plt.subplots()
+                ax.plot(df_prediction_ui['CrimeTypeName'], df_prediction_ui['Prediction'], marker='o', label='Prediction', color='b')
+                ax.plot(df_prediction_ui['CrimeTypeName'], df_prediction_ui['True_Value'], marker='o', label='True Value', color='r')
+
+                ax.set_xlabel('Crime Type Name')
+                ax.set_ylabel('Counts')
+                ax.set_title('Prediction vs True Value by Crime Type')
+                ax.set_xticklabels(df_prediction_ui['CrimeTypeName'], rotation=45, ha='right')
+                ax.legend()
+
+                # Display the line plot in Streamlit
+                st.pyplot(fig)
+
+
+    # Add your content for the second column here, e.g., another plot
+    # Example: st.line_chart(data2)
+                
+
+                # # Create the graph using seaborn
+                # plt.figure(figsize=(10, 6))
+                # sns.lineplot(data=df_predtions_melt, x='Year', y='Percentage', hue='CrimeCategory', marker='o')
+                # plt.title('Crime Trends Over the Years')
+                # plt.legend(title='Crime Category', bbox_to_anchor=(1.05, 1), loc='upper left')
+                # plt.xticks(rotation=45)
+
+                #         # Annotate each data point with its value
+                # for i in range(df_predtions_melt.shape[0]):
+                #     plt.text(df_predtions_melt['Year'].iloc[i], df_predtions_melt['Percentage'].iloc[i],
+                #     f"{df_predtions_melt['Percentage'].iloc[i]:.2f}", color='black', ha='right', va='bottom')
+
+                # # Display the graph in Streamlit
+                # st.pyplot(plt)
 
 with MetricsTab4:
-    with st.expander('Best Predictions', expanded=False):
+    with st.expander('Mertics', expanded=False):
         performance_col = st.columns((2, 0.2, 3))
        
 with ShapleyAnalysisTab5:
     with st.expander('Shapley Post-Hoc Analysis', expanded=False):
         performance_col = st.columns((2, 0.2, 3))
+
+        # model_trained = XGBRegressor(n_estimators=100, learning_rate=0.01, max_depth=3)
+        #  #Prepare the features and the target variable
+        # X = df_prediction_ui.drop(columns=['Id', 'Prediction', 'True_Value'])  # Drop non-feature columns
+        # y = df_prediction_ui['Prediction']  # Target variable
+
+        # # Assuming 'your_model' is the trained model you are using
+        # # model = your_model  # Your pre-trained model
+
+        # # Create a SHAP explainer
+        # explainer = shap.Explainer(model_trained, X)  # Replace 'model' with your trained model
+
+        # # Calculate SHAP values for the entire dataset
+        # shap_values = explainer(X)
+
+        # # Get unique CrimeTypeNames
+        # crime_types = df_prediction_ui['CrimeTypeName'].unique()
+
+        # # Create a plot for each CrimeTypeName
+        # for crime_type in crime_types:
+        #     st.header(f'SHAP Force Plot for {crime_type}', divider='rainbow')
+            
+        #     # Filter the DataFrame for the current CrimeTypeName
+        #     crime_data = df_prediction_ui[df_prediction_ui['CrimeTypeName'] == crime_type]
+            
+        #     # Calculate SHAP values for the filtered data
+        #     crime_X = crime_data.drop(columns=['Id', 'Prediction', 'True_Value'])
+        #     crime_shap_values = explainer(crime_X)
+            
+        #     # Plot the force plot for the first instance of the filtered data
+        #     shap.initjs()
+            
+        #     # Display the force plot for the first instance (or any instance you want)
+        #     st.write(f"Force plot for instance index 0 of {crime_type}:")
+        #     force_plot = shap.force_plot(explainer.expected_value, crime_shap_values[0], crime_X.iloc[0], matplotlib=True)
+            
+        #     # Show the force plot in Streamlit
+        #     st.pyplot(plt.gcf())
+            
+        #     # Clear the plot to avoid overlap in Streamlit
+        #     plt.clf()
 
 with Transformationtab6:
     # if identify_outlier:
@@ -242,12 +326,15 @@ with Transformationtab6:
 
         with performance_col[0]:
             st.header('Outliers', divider='rainbow')
+            df_identify_outliers_db = identify_outliers_data(df_suggeted_province_quarterly_data_db)
             st.dataframe(df_identify_outliers_db.sort_values(by='PoliceStationCode'))
 
                 # Plot box plot of the data with outliers replaced
         with performance_col[2]:
             st.header('Outliers percentage plot', divider='rainbow')
             # Melt DataFrame to long format for easy plotting
+              # if identify_outlier:
+            df_identify_outliers_db = identify_outliers_data(df_suggeted_province_quarterly_data_db)
             df_identify_outliers_melted = df_identify_outliers_db.melt(id_vars=['CrimeCategory', 'ProvinceCode', 'PoliceStationCode', 'Quarter', 'Outliers'],
             var_name='Year', value_name='Percentage')
 
