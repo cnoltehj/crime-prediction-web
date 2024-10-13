@@ -1,6 +1,7 @@
 import requests
 import pandas as pd
 import config
+from modelPredictionResponse.DataModel import PredictionData, MerticData
 
 
 
@@ -109,7 +110,7 @@ def fetch_predition_province_policestation_year_quarterly_algorithm(provincecode
         if isinstance(data, list):
             # Convert the JSON data to a DataFrame
             df = pd.DataFrame(data)
-
+            
              # Ensure 'CrimeCategory', 'ProvinceName', and 'StationName' are treated as strings and handle None values
             df['Algorithm'] = df['Algorithm'].astype(str)
             df['CrimeCategoryCode'] = df['CrimeCategoryCode'].astype(str)
@@ -319,3 +320,111 @@ def fetch_stats_policestation_per_province(provincecode: str, quarter: int):
         print(f"Error: {err}")
     
     return pd.DataFrame()
+
+# Function to save prediction data via API
+
+    endpoint = f"{config.BaseUrl_save_prediction_data}"  # Replace with your actual API endpoint
+
+    for _, row in predictions_df.iterrows():
+        scenario_number = int(row['Scenario'].split()[-1])  # Splits by space and takes the last part
+        # Prepare JSON payload for each row in the DataFrame
+        payload = PredictionData(
+            Prediction=int(row['Prediction']),
+            TrueValue=int(row['True_value']),
+            Algorithm=row['Algorithm'],
+            Scenario= scenario_number,
+            CrimeCategoryCode=row['CrimeCategory'],
+            ProvinceCode=row['ProvinceCode'],
+            PoliceStationCode=row['PoliceStationCode'],
+            Quarter=int(row['Quarter']),
+            PredictionYear= 2024 #int(row['PredictionYear'])  
+        ).model_dump()  # Convert Pydantic model to a dictionary
+
+        try:
+            response = requests.post(endpoint, json=payload)
+            response.raise_for_status()  # Check for HTTP errors
+            print(f"Prediction saved successfully for {row['Algorithm']} - {row['Scenario']}")
+        except requests.exceptions.HTTPError as errh:
+            print(f"HTTP Error: {errh}")
+        except requests.exceptions.ConnectionError as errc:
+            print(f"Error Connecting: {errc}")
+        except requests.exceptions.Timeout as errt:
+            print(f"Timeout Error: {errt}")
+        except requests.exceptions.RequestException as err:
+            print(f"Error: {err}")
+
+# Function to save prediction data via API
+def save_prediction_data(predictions_df):
+    # Remove the trailing `/?` if unnecessary
+    endpoint = config.BaseUrl_save_prediction_data
+
+    for _, row in predictions_df.iterrows():
+        # Handle scenario extraction from string (e.g., 'Scenario 1' -> 1)
+        try:
+            scenario_number = int(row['Scenario'].split()[-1])  # Assumes 'Scenario X' format
+        except ValueError:
+            print(f"Error parsing scenario for row: {row}")
+            continue  # Skip this row if scenario parsing fails
+
+        # Prepare JSON payload using Pydantic model
+        payload = PredictionData(
+            Prediction=int(row['Prediction']),
+            TrueValue=int(row['True_value']),
+            Algorithm=row['Algorithm'],
+            Scenario=scenario_number,
+            CrimeCategoryCode=row['CrimeCategory'],
+            ProvinceCode=row['ProvinceCode'],
+            PoliceStationCode=row['PoliceStationCode'],
+            Quarter=int(row['Quarter']),
+            PredictionYear=2024  # Static value for prediction year
+        ).model_dump()  # Correctly invoke model_dump()
+
+        # Debug: Print payload for inspection before sending
+        print(f"Sending payload: {payload}")
+
+        try:
+            # Send POST request with the prepared payload
+            response = requests.post(endpoint, json=payload)
+            response.raise_for_status()  # Raise exception for HTTP errors
+            print(f"Prediction saved successfully for {row['Algorithm']} - Scenario {scenario_number}")
+
+        except requests.exceptions.HTTPError as errh:
+            print(f"HTTP Error: {errh}")
+        except requests.exceptions.ConnectionError as errc:
+            print(f"Error Connecting: {errc}")
+        except requests.exceptions.Timeout as errt:
+            print(f"Timeout Error: {errt}")
+        except requests.exceptions.RequestException as err:
+            print(f"Error: {err}")
+
+
+def save_metric_data(metrics_df):
+    endpoint = f"{config.BaseUrl_save_mertic_data}"  # Replace with your actual API endpoint
+
+    for _, row in metrics_df.iterrows():
+
+        scenario_number = int(row['Scenario'].split()[-1])
+        # Prepare JSON payload for each row in the DataFrame
+        payload = MerticData(
+        Algorithm = row['Algorithm'], 
+        Scenario = scenario_number,
+        PredictedYear = 2024, #int(row['PredictedYear']),
+        MAE = float(row['MAE']),
+        MSE = float(row['MSE']),
+        MAPE = float(row['MAPE']),
+        RSquare = float(row['R²']),
+        ARS = float(row['ARS']) 
+        ).model_dump()  # Convert Pydantic model to a dictionary
+
+        try:
+            response = requests.post(endpoint, json=payload)
+            response.raise_for_status()  # Check for HTTP errors
+            print(f"Prediction saved successfully for {row['Algorithm']} - {row['Scenario']}")
+        except requests.exceptions.HTTPError as errh:
+            print(f"HTTP Error: {errh}")
+        except requests.exceptions.ConnectionError as errc:
+            print(f"Error Connecting: {errc}")
+        except requests.exceptions.Timeout as errt:
+            print(f"Timeout Error: {errt}")
+        except requests.exceptions.RequestException as err:
+            print(f"Error: {err}")
