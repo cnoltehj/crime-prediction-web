@@ -14,6 +14,7 @@ import altair as alt
 import time
 import zipfile
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 import seaborn as sns
 import shap
 from dataRequest.crimedbRequest import (
@@ -23,7 +24,9 @@ from dataRequest.crimedbRequest import (
     fetch_predition_province_policestation_year_quarterly_algorithm,
     fetch_suggest_stats_province_policestation,
     fetch_stats_policestation_per_province,
-    save_prediction_data,
+    fetch_training_metrics_data,
+    save_train_prediction_data,
+    save_all_prediction_data,
     save_metric_data
     )
 from modelTransformationResponse.outliersResponse import (
@@ -66,7 +69,7 @@ st.set_page_config(page_title='ML Model Building', page_icon='🤖', layout='wid
 
 st.title('Interpretable Crime Hotspot Prediction')
 
-AboutTab1,PreditionsUserViewTab2,PostHocAnalysisTab3,DataExplorationTab4,Transformationtab5,SplitScalerDataTab6, EncodingDataTab7,DBTrainedValuesTab8,DBTrainedValuesTab9,DBAllPreditionsTab10 = st.tabs(['About','Preditions-User','PostHocAnalysis','Exploration-Data','Transformation-Data','ScalerSplit-Data', 'Encoded-Data','ModelTraining','DBTrainedValues','DBAllPreditions'])
+AboutTab1,PreditionsUserViewTab2,PostHocAnalysisTab3,DataExplorationTab4,Transformationtab5,SplitScalerDataTab6, EncodingDataTab7,ModelTrainingTab8,DBTrainedValuesTab9,DBAllPreditionsTab10 = st.tabs(['About','Preditions-User','PostHocAnalysis','Exploration-Data','Transformation-Data','ScalerSplit-Data', 'Encoded-Data','ModelTraining','DBTrainedValues','AllPreditions'])
 
 with AboutTab1:
     with st.expander('About this application'):
@@ -151,129 +154,51 @@ with AboutTab1:
                 crime_categories_list = df_crime_data_db['CrimeCategory'].tolist()
 
 with PreditionsUserViewTab2:
-        with st.expander(f'Prediction Values', expanded=False):
-            performance_col = st.columns((2, 0.2, 3))
+        # Fetch the prediction data
+        def_fetch_stats_province_policestation_quarterly_algorithm_db = fetch_predition_province_policestation_year_quarterly_algorithm(province_code_value, police_code_value, quarter_value, "MLPR")
 
-            with performance_col[0]:
-                st.header('Predictions', divider='rainbow')
-                # # Fetch data from the API
-                # df_fetch_predition_province_policestation_year_quarterly_algorithm_data_db = fetch_predition_province_policestation_year_quarterly_algorithm(province_code_value, police_code_value, quarter_value, algorithm)
 
-                # # Check if the API response is valid
-                # if not df_fetch_predition_province_policestation_year_quarterly_algorithm_data_db.empty:
-                # # Create DataFrame from the API response
-                #     df_prediction_ui = pd.DataFrame(df_fetch_predition_province_policestation_year_quarterly_algorithm_data_db)
-    
-                # # Check if DataFrame is empty
-                # if not df_prediction_ui.empty:
-                # # Display the DataFrame, ensuring it shows all columns
-                #     st.dataframe(df_prediction_ui, height=280, use_container_width=True)
-                # else:
-                #     st.write("API call returned None. Please check the API.")
+        st.header(f'{province_name}: Predictions vs True_Value', divider='rainbow')
+        df_prediction_ui = pd.DataFrame(def_fetch_stats_province_policestation_quarterly_algorithm_db)
+                
+        # Bar plot for Prediction vs True_Value
+        bar_width = 0.35
+        index = range(len(df_prediction_ui))
 
-                # Plot box plot of the data with outliers replaced
-            with performance_col[2]:
+                # Create the bar plot
+        fig, ax = plt.subplots()
+        bar1 = ax.bar(index, df_prediction_ui['Prediction'], bar_width, label='Prediction', color='b')
+        bar2 = ax.bar([i + bar_width for i in index], df_prediction_ui['True_Value'], bar_width, label='True Value', color='r')
+
+        ax.set_xlabel('CrimeCategory')
+        ax.set_ylabel('Counts')
+        ax.set_title(f'{province_code_value}: {police_station_name} : Prediction vs True Value')
+        ax.set_xticks([i + bar_width / 2 for i in index])
+        ax.set_xticklabels(df_prediction_ui['CrimeCategory'], rotation=45, ha='right')
+        ax.legend()
+
+                # Display the bar plot in Streamlit
+        st.pyplot(fig)
+
                 #st.header('Predictions plot', divider='rainbow')
                 # Header for the first section
-                st.header('Predictions vs True_Value Bar Plot', divider='rainbow')
-
-                # # Bar plot for Prediction vs True_Value
-                # bar_width = 0.35
-                # index = range(len(df_prediction_ui))
-
-                # # Create the bar plot
-                # fig, ax = plt.subplots()
-                # bar1 = ax.bar(index, df_prediction_ui['Prediction'], bar_width, label='Prediction', color='b')
-                # bar2 = ax.bar([i + bar_width for i in index], df_prediction_ui['True_Value'], bar_width, label='True Value', color='r')
-
-                # ax.set_xlabel('Crime Types')
-                # ax.set_ylabel('Counts')
-                # ax.set_title('Prediction vs True Value')
-                # ax.set_xticks([i + bar_width / 2 for i in index])
-                # ax.set_xticklabels(df_prediction_ui['CrimeTypeName'], rotation=45, ha='right')
-                # ax.legend()
-
-                # # Display the bar plot in Streamlit
-                # st.pyplot(fig)
-
-                # st.markdown("---")  # Creates a horizontal line for separation
-
-                # st.header('Predictions vs True_Value for CrimeTypeName Line Plot', divider='rainbow')
-
-                # # Create the line plot
-                # fig, ax = plt.subplots()
-                # ax.plot(df_prediction_ui['CrimeTypeName'], df_prediction_ui['Prediction'], marker='o', label='Prediction', color='b')
-                # ax.plot(df_prediction_ui['CrimeTypeName'], df_prediction_ui['True_Value'], marker='o', label='True Value', color='r')
-
-                # ax.set_xlabel('Crime Type Name')
-                # ax.set_ylabel('Counts')
-                # ax.set_title('Prediction vs True Value by Crime Type')
-                # ax.set_xticklabels(df_prediction_ui['CrimeTypeName'], rotation=45, ha='right')
-                # ax.legend()
-
-                # # Display the line plot in Streamlit
-                # st.pyplot(fig)
-
-
-    # Add your content for the second column here, e.g., another plot
-    # Example: st.line_chart(data2)
-                
-
-                # # Create the graph using seaborn
-                # plt.figure(figsize=(10, 6))
-                # sns.lineplot(data=df_predtions_melt, x='Year', y='Percentage', hue='CrimeCategory', marker='o')
-                # plt.title('Crime Trends Over the Years')
-                # plt.legend(title='Crime Category', bbox_to_anchor=(1.05, 1), loc='upper left')
-                # plt.xticks(rotation=45)
-
-                #         # Annotate each data point with its value
-                # for i in range(df_predtions_melt.shape[0]):
-                #     plt.text(df_predtions_melt['Year'].iloc[i], df_predtions_melt['Percentage'].iloc[i],
-                #     f"{df_predtions_melt['Percentage'].iloc[i]:.2f}", color='black', ha='right', va='bottom')
-
-                # # Display the graph in Streamlit
-                # st.pyplot(plt)
-        with st.expander(f'Initial dataset', expanded=False):
-            visualise_initialdate = st.toggle('Visualise initial dataset')
-            st.dataframe(df_suggeted_province_quarterly_data_db.sort_values(by='PoliceStationCode'))
-
-            # Melting the DataFrame to get a tidy format
-            df_initial_data_melt = df_suggeted_province_quarterly_data_db.melt(
-                id_vars=['CrimeCategory', 'ProvinceCode', 'PoliceStationCode','Quarter'],
-                var_name='Year',
-            value_name='Percentage'
-            )
-
-            if visualise_initialdate:
-                # Create the graph using seaborn
-                plt.figure(figsize=(10, 6))
-                sns.lineplot(data=df_initial_data_melt, x='Year', y='Percentage', hue='CrimeCategory', marker='o')
-                plt.title('Crime Trends Over the Years')
-                plt.xlabel('Year')
-                plt.ylabel('Percentage')
-                plt.legend(title='Crime Category', bbox_to_anchor=(1.05, 1), loc='upper left')
-                plt.xticks(rotation=45)
-
-                # Annotate each data point with its value
-                for i in range(df_initial_data_melt.shape[0]):
-                    plt.text(
-                        df_initial_data_melt['Year'].iloc[i],
-                        df_initial_data_melt['Percentage'].iloc[i],
-                        f"{df_initial_data_melt['Percentage'].iloc[i]:.2f}",
-                        color='black',
-                        ha='right',
-                        va='bottom'
-                    )
-
-                # Display the graph in Streamlit
-                st.pyplot(plt)
+        st.header(f'{province_code_value}: {police_station_name} Police Station : Predictions', divider='rainbow')
+        st.dataframe(def_fetch_stats_province_policestation_quarterly_algorithm_db) #.sort_values(by='CrimeCategory'))
+    
+    
 
 with DataExplorationTab4:
+    st.header(f'{province_name}: {police_station_name} Police station Initial dataset', divider='rainbow')
+    if not def_fetch_stats_province_policestation_quarterly_algorithm_db.empty:
+        st.dataframe(def_fetch_stats_province_policestation_quarterly_algorithm_db)  # Show the dataframe
+    else:
+        st.write("No data available or API returned an empty result.")
+
+    st.header(f'{province_name}: All initial dataset used for training models', divider='rainbow')
     st.dataframe(df_suggeted_province_quarterly_data_db) #.sort_values(by='PoliceStationCode'))
 
 with Transformationtab5:
-    # if identify_outlier:
-    with st.expander('Identify outliers', expanded=False):
+        st.header('Identify outliers', divider='rainbow')
         performance_col = st.columns((2, 0.2, 3))
 
         with performance_col[0]:
@@ -290,89 +215,42 @@ with Transformationtab5:
             df_identify_outliers_melted = df_identify_outliers_db.melt(id_vars=['CrimeCategory', 'ProvinceCode', 'PoliceStationCode', 'Quarter', 'Outliers'],
             var_name='Year', value_name='Percentage')
 
-            # # Convert 'Outliers' to list of outlier values
-            # def parse_outliers(outliers):
-            #     if isinstance(outliers, str):
-            #         return [float(i) for i in outliers.split(',')]
-            #     elif isinstance(outliers, (float, int)):
-            #         return [float(outliers)]
-            #     return []
+            # Convert 'Outliers' to list of outlier values
+            def parse_outliers(outliers):
+                if isinstance(outliers, str):
+                    return [float(i) for i in outliers.split(',')]
+                elif isinstance(outliers, (float, int)):
+                    return [float(outliers)]
+                return []
 
-            # df_identify_outliers_melted['Outliers'] = df_identify_outliers_melted['Outliers'].apply(parse_outliers)
+            df_identify_outliers_melted['Outliers'] = df_identify_outliers_melted['Outliers'].apply(parse_outliers)
 
-            # df_exploded = df_identify_outliers_melted.explode('Outliers')
+            df_exploded = df_identify_outliers_melted.explode('Outliers')
             
-            # plt.figure(figsize=(12, 8))
-            # # Plotting the boxplot
-            # sns.boxplot(x='Year', y='Percentage', data=df_identify_outliers_melted)
-            # plt.title("Box Plot Identifying the Outliers")
-            # plt.xticks(rotation=45)
+            plt.figure(figsize=(12, 8))
+            # Plotting the boxplot
+            sns.boxplot(x='Year', y='Percentage', data=df_identify_outliers_melted)
+            plt.title("Box Plot Identifying the Outliers")
+            plt.xticks(rotation=45)
 
-            # # Add annotations for outliers
-            # for _, row in df_exploded.iterrows():
-            #     plt.text(
-            #         x=row['Year'],
-            #         y=row['Outliers'] + 2,  # Adjust this to fit your plot
-            #         s=f"{row['Outliers']:.1f}",
-            #         fontsize=9,
-            #         color='black',
-            #         ha='center'
-            #     )
+            # Add annotations for outliers
+            for _, row in df_exploded.iterrows():
+                plt.text(
+                    x=row['Year'],
+                    y=row['Outliers'] + 2,  # Adjust this to fit your plot
+                    s=f"{row['Outliers']:.1f}",
+                    fontsize=9,
+                    color='black',
+                    ha='center'
+                )
 
-            # st.pyplot(plt)
+            st.pyplot(plt)
 
         # if replace_outlier:
         #     if not (df_replace_outliers_db.empty and df_identify_outliers_db.empty) and replace_outlier:
-    with st.expander('Replaced outliers with the median value', expanded=False):
+        st.header('Replaced outliers with the median value', divider='rainbow')
         df_replace_outliers = replace_outliers_data(df_suggeted_province_quarterly_data_db)
-    
-        # Display the DataFrame sorted by 'PoliceStationCode'
         st.dataframe(df_replace_outliers.sort_values(by='PoliceStationCode'), height=210, use_container_width=True)
-
-        # Melt the DataFrame for visualization purposes
-        df_outliers_replaced_melt = df_replace_outliers.melt(
-            id_vars=['CrimeCategory', 'ProvinceCode', 'PoliceStationCode', 'Quarter'],
-            var_name='Year',
-            value_name='Percentage'
-        )
-
-        # Convert 'Percentage' to numeric if it's not already
-        df_outliers_replaced_melt['Percentage'] = pd.to_numeric(df_outliers_replaced_melt['Percentage'], errors='coerce')
-
-        # Create the line plot
-        plt.figure(figsize=(12, 8))
-        sns.lineplot(data=df_outliers_replaced_melt, x='Year', y='Percentage', hue='CrimeCategory', marker='o')
-    
-        # Add title and labels
-        plt.title('Crime Trends Over the Years with Outliers Replaced')
-        plt.xlabel('Year')
-        plt.ylabel('Percentage')
-
-        # Adjust legend placement
-        plt.legend(title='Crime Category', bbox_to_anchor=(1.05, 1), loc='upper left')
-    
-        # Rotate x-axis labels for better readability
-        plt.xticks(rotation=45)
-
-        # Annotate each data point with its value
-        for i in range(df_outliers_replaced_melt.shape[0]):
-            plt.text(
-                x=i % len(df_outliers_replaced_melt['Year'].unique()),  # Corrected x-coordinate for annotation
-                y=df_outliers_replaced_melt['Percentage'].iloc[i],
-                s=f"{df_outliers_replaced_melt['Percentage'].iloc[i]:.2f}",
-                color='black',
-                ha='right',
-                va='bottom'
-            )
-
-        # Adjust layout to make room for the legend
-        plt.tight_layout()
-
-        # Display the graph in Streamlit
-        st.pyplot(plt)
-
-# 1. Increase max_iter
-max_iter_value = 1000  # Increase this value if necessary
 
 # Initialize models and parameter grid
 models = {
@@ -384,17 +262,12 @@ models = {
  }
 
 params = {
-    'RFM': {'n_estimators': [100], 'max_depth': [10,]},
-    'SVR': {'C': [1, 10], 'kernel': ['linear']},  
-    'XGBR': {'n_estimators': [100], 'learning_rate': [0.01], 'max_depth': [3]},  
-    'KNNR': {'n_neighbors': [5], 'weights': ['uniform']},  
-    'MLPR': MLPRegressor(hidden_layer_sizes=(100,),  # Simplified to one layer with 100 neurons
-                         activation='relu',
-                         solver='adam',  # Use Adam solver instead of lbfgs
-                         learning_rate_init=0.001,
-                         max_iter=max_iter_value)
+    'RFM': {'n_estimators': [100, 200], 'max_depth': [None, 10, 20]},
+    'SVR': {'C': [1, 10], 'kernel': ['linear', 'rbf']},
+    'XGBR': {'n_estimators': [100, 200], 'learning_rate': [0.01, 0.1], 'max_depth': [3, 5]},
+    'KNNR': {'n_neighbors': [5, 10], 'weights': ['uniform', 'distance']},
+    'MLPR': {'hidden_layer_sizes': [(100,), (100, 50)], 'activation': ['relu', 'tanh'],'learning_rate_init': [0.001, 0.01],'max_iter': [500, 1000],'solver': ['adam', 'lbfgs']}
 }
-
 
 def evaluate_metrics(y_true, y_pred):
         metrics_list = {
@@ -429,7 +302,6 @@ def replace_non_finite_with_median(df):
     
     return df
 
-# Example usage:
 df_wide = replace_non_finite_with_median(df_cleaned)
 
 # B - Defining feature set X (years 2016-2023) and target y (2024 prediction) =====
@@ -438,12 +310,6 @@ features = [col for col in df_wide.columns if col not in ['CrimeCategory', 'Prov
 
 X = df_wide[['2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023']]
 y = df_wide['2023']  # Using 2023 as a proxy for training, predicting 2024
-
-   # # Adjust the feature set to include the encoded columns as necessary
-    # features = [col for col in df_encoded.columns if col not in ['CrimeCategory', 'ProvinceCode', 'Quarter', '2023']]
-    
-    # X = df_encoded[features]
-    # y = df_encoded['2023']
 
 # C - Splitting the dataset into train/test sets (use 2016-2023 data for training) =====
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
@@ -462,53 +328,6 @@ scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
-# predictions = {}
-
-# # Loop through each model and perform GridSearchCV
-# for name, model in models.items():
-#     print(f"Training {name} model...")
-    
-#     # Get the parameter grid for the current model
-#     param_grid = params[name]
-    
-#     # Define GridSearchCV
-#     grid_search = GridSearchCV(model, param_grid, cv=5, scoring='neg_mean_squared_error', n_jobs=-1)
-    
-#     # Fit the model using GridSearchCV
-#     grid_search.fit(X_train_scaled, y_train)
-    
-#     # Retrieve the best estimator (model with best parameters)
-#     best_model = grid_search.best_estimator_
-    
-#     # Predict on the test set
-#     y_pred = best_model.predict(X_test_scaled)
-    
-#     # Store predictions and calculate metrics
-#     predictions[name] = {
-#         'Prediction': y_pred,
-#         'True_value': y_test,
-#         'MSE': mean_squared_error(y_test, y_pred),
-#         'MAE': mean_absolute_error(y_test, y_pred),
-#         'R²': r2_score(y_test, y_pred),
-#         'MAPE': mean_absolute_percentage_error(y_test, y_pred),
-#         'RMSE': np.sqrt(mean_squared_error(y_test, y_pred))
-#     }
-
-# # F - Merging predictions with original dataset =====
-# # Create a DataFrame for the output format
-# output_data = df_wide[['CrimeCategory', 'ProvinceCode', 'PoliceStationCode', 'Quarter', '2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023']].copy()
-
-# output_mertics = df_wide[['CrimeCategory', 'ProvinceCode', 'PoliceStationCode', 'Quarter', '2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023']].copy()
-
-# # Adding predictions and true values for each model
-# for name, results in predictions.items():
-#     # Adding prediction for 2024 as a new column
-#     output_data[f'Prediction_{name}'] = pd.Series(results['Prediction'], index=y_test.index)
-    
-#     # Adding true values for 2023 (actual values from the test set)
-#     output_data[f'True_value_{name}'] = pd.Series(y_test.values, index=y_test.index)
-
-#     output_mertics[f'MSE_{name}'] = pd.Series(results['MSE'], index=y_test.index)
 
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
@@ -530,14 +349,6 @@ def ensure_consistent_dtypes(df):
             except ValueError:
                 pass
     return df
-
-# # Function to revert 'PoliceStationCode', 'Quarter' and 'ProvinceCode' to their original values
-# def revert_labels(df, original_df):
-#     df['PoliceStationCode'] = original_df['Original_PoliceStationCode']
-#     df['Quarter'] = original_df['Original_Quarter']
-#     df['ProvinceCode'] = original_df['Original_ProvinceCode']
-#     return df
-
 
 # Function to train and predict per scenario and algorithm
 def train_and_predict(df, models, params, scenario_func, scenario_name, original_df):
@@ -588,7 +399,7 @@ def train_and_predict(df, models, params, scenario_func, scenario_name, original
     
     # Save all the predictions and metrics to the database
     if not predictions_df.empty:
-        save_prediction_data(predictions_df)
+        save_train_prediction_data(predictions_df)
     
     if not metrics_df.empty:
         save_metric_data(metrics_df)
@@ -597,6 +408,10 @@ def train_and_predict(df, models, params, scenario_func, scenario_name, original
 
 
 # Scenario functions
+def scenario_0(df):
+    # In this scenario, no encoding is applied. The raw data as it is.
+    return df
+
 def scenario_1(df):
     label_encoder_psc = LabelEncoder()
     label_encoder_qtr = LabelEncoder()
@@ -629,30 +444,20 @@ def scenario_4(df):
     df = pd.concat([df, encoded_df], axis=1).drop(['PoliceStationCode'], axis=1)
     return df
 
-# Initialize models and parameter grid
-models = {
-    'RFM': RandomForestRegressor(),
-    'SVR': SVR(),
-    'XGBR': XGBRegressor(),
-    'KNNR': KNeighborsRegressor(),
-    'MLPR': MLPRegressor()
-}
+def scenario_5(df):
+    # Integer encode categorical variables using LabelEncoder for 'PoliceStationCode' and 'Quarter'
+    label_encoder_psc = LabelEncoder()
+    label_encoder_qtr = LabelEncoder()
+    
+    df['PoliceStationCode'] = label_encoder_psc.fit_transform(df['PoliceStationCode'])
+    df['Quarter'] = label_encoder_qtr.fit_transform(df['Quarter'])
+    
+    return df
 
-params = {
-    'RFM': {'n_estimators': [100, 200], 'max_depth': [None, 10, 20]},
-    'SVR': {'C': [1, 10], 'kernel': ['linear', 'rbf']},
-    'XGBR': {'n_estimators': [100, 200], 'learning_rate': [0.01, 0.1], 'max_depth': [3, 5]},
-    'KNNR': {'n_neighbors': [5, 10], 'weights': ['uniform', 'distance']},
-    'MLPR': {'hidden_layer_sizes': [(100,), (100, 50)], 'activation': ['relu', 'tanh'],'learning_rate_init': [0.001, 0.01],'max_iter': [500, 1000],'solver': ['adam', 'lbfgs']}
-}
 
 # Replace non-finite and NaN values with median
 df_cleaned = replace_non_finite_with_median(df_replace_outliers)
 
-# # Save original values for later
-# df_cleaned['Original_PoliceStationCode'] = df_cleaned['PoliceStationCode']
-# df_cleaned['Original_Quarter'] = df_cleaned['Quarter']
-# df_cleaned['Original_ProvinceCode'] = df_cleaned['ProvinceCode']
 
 # Prepare train/test data
 X = df_cleaned[['2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023']]
@@ -666,13 +471,15 @@ X_test_scaled = scaler_X.transform(X_test)
 
 # Run scenarios
 scenario_funcs = {
-    "Scenario 1": scenario_1,
-    "Scenario 2": scenario_2,
-    "Scenario 3": scenario_3,
-    "Scenario 4": scenario_4
-}
 
-             
+    "Scenario 0": scenario_0,  # No encoding
+    "Scenario 1": scenario_1,  # Label encoding for 'PoliceStationCode' and 'Quarter'
+    "Scenario 2": scenario_2,  # One-hot encoding for 'PoliceStationCode' and 'Quarter'
+    "Scenario 3": scenario_3,  # Label encoding for 'PoliceStationCode' and One-hot for 'Quarter'
+    "Scenario 4": scenario_4,  # Label encoding for 'Quarter' and One-hot for 'PoliceStationCode'
+    "Scenario 5": scenario_5   # Integer encoding
+}
+          
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 with SplitScalerDataTab6:
@@ -701,8 +508,10 @@ with SplitScalerDataTab6:
             st.markdown('**y**')
             st.dataframe(y_test, height=210, hide_index=True, use_container_width=True)
 
-with DBTrainedValuesTab8:
+with ModelTrainingTab8:
     trainmodel = st.toggle('Train model')
+    preditionsmodel = st.toggle('Prediction after train the model')
+
     if trainmodel:
         for scenario_name, scenario_func in scenario_funcs.items():
             for name in models.keys():
@@ -712,35 +521,237 @@ with DBTrainedValuesTab8:
                 )
 
                 # Display predictions and metrics for each algorithm and scenario
-                st.markdown(f"### Predictions for {name} under {scenario_name}")
+                st.markdown(f"Predictions for {name} under {scenario_name}")
                 st.dataframe(scenario_predictions, height=300, use_container_width=True)
                 
-                st.markdown(f"### Metrics for {name} under {scenario_name}")
+                st.markdown(f"Metrics for {name} under {scenario_name}")
                 st.dataframe(scenario_metrics.head(1), height=50, use_container_width=True)
+
+    if preditionsmodel:
+       
+        st.markdown(f"Predictions")
+        # st.dataframe(scenario_predictions, height=300, use_container_width=True)
 
 
 with DBTrainedValuesTab9:
-    with st.expander(f'Mertics: Encoding', expanded=False):
+
+  # Run scenarios
+    metrics_scenario = {
+        "Scenario 0": 0,  # No encoding
+        "Scenario 1": 1,  # Label encoding for 'PoliceStationCode' and 'Quarter'
+        "Scenario 2": 2,  # One-hot encoding for 'PoliceStationCode' and 'Quarter'
+        "Scenario 3": 3,  # Label encoding for 'PoliceStationCode' and One-hot for 'Quarter'
+        "Scenario 4": 4,  # Label encoding for 'Quarter' and One-hot for 'PoliceStationCode'
+        "Scenario 5": 5   # Integer encoding
+        }
+
+        # Fetch the training metrics data for all scenarios
+    df_training_metrics_data_db = fetch_training_metrics_data()
+
+    with st.expander(f'Metrics Bar Plot', expanded=False):
+        st.header(f'Train Metrics plots :', divider='rainbow')
+
+        # Metrics to be plotted
+        metrics = ['MAE', 'MSE', 'R-Square', 'MAPE', 'ARS']
+        models = df_training_metrics_data_db['Algorithm'].unique()
+
+        # Initialize scenario names for the x-axis labels
+        scenario_labels = list(metrics_scenario.keys())
+
+        # Define a colormap to give each bar a different color per model
+        colors = cm.get_cmap('tab10', len(models))
+
+        # Plot the bar charts for each metric across all models and scenarios
+        for metric in metrics:
+            fig, ax = plt.subplots(figsize=(10, 6))
+            
+            # Width for each bar group
+            bar_width = 0.15
+            
+            # X-axis indices for each scenario
+            indices = np.arange(len(scenario_labels))
+            
+            # Loop through each model and plot bars for each scenario
+            for i, model in enumerate(models):
+                model_data = []
+                
+                for scenario_name, scenario_id in metrics_scenario.items():
+                    # Extract the row for the specific scenario and model
+                    scenario_metrics = df_training_metrics_data_db[
+                        (df_training_metrics_data_db['Scenario'] == scenario_id) &
+                        (df_training_metrics_data_db['Algorithm'] == model)
+                    ]
+                    if not scenario_metrics.empty:
+                        model_data.append(scenario_metrics[metric].values[0])
+                    else:
+                        model_data.append(np.nan)
+                
+                # Plot the bar chart for the current model and metric
+                bars = ax.bar(indices + i * bar_width, model_data, bar_width, label=model, color=colors(i))
+                
+                # Add values on top of each bar
+                for bar in bars:
+                    yval = bar.get_height()
+                    ax.text(bar.get_x() + bar.get_width()/2, yval, round(yval, 2), ha='center', va='bottom')
+
+            # Set chart labels and title
+            ax.set_xticks(indices + bar_width * (len(models) - 1) / 2)
+            ax.set_xticklabels(scenario_labels, rotation=45, ha='right')
+            ax.set_ylabel(f'{metric} Value')
+            ax.set_title(f'{metric} for Each Model across Scenarios')
+
+            # Add a legend to the graph
+            ax.legend(title='Models', loc='best')
+
+            # Display the chart in Streamlit
+            st.pyplot(fig)
+
+    with st.expander(f'Get Metrics Data', expanded=False):
+        st.header(f'Get Train Metrics data from database :', divider='rainbow')
+
+        # Metrics to be plotted
+        metrics = ['MAE', 'MSE', 'R-Square', 'MAPE', 'ARS'] #'R²'
+
+        # Initialize a dictionary to hold values for each metric across all scenarios
+        metrics_values = {metric: [] for metric in metrics}
+
+        # Initialize scenario names for the x-axis labels
+        scenario_labels = list(metrics_scenario.keys())
+
+        # Populate the dictionary with metric values for each scenario
+        for scenario_name, scenario_id in metrics_scenario.items():
+            # Extract the rows from the dataframe for the specific scenario
+            scenario_metrics = df_training_metrics_data_db[df_training_metrics_data_db['Scenario'] == scenario_id]
+            
+            st.subheader(f'{scenario_name}', divider='rainbow')
+            
+            # Filter the dataframe to get metrics for the current scenario
+            scenario_metrics = df_training_metrics_data_db[df_training_metrics_data_db['Scenario'] == scenario_id]
+            
+            # Display the metrics for the current scenario
+            st.dataframe(scenario_metrics, height=210, hide_index=True, use_container_width=True)
+         
+
+    with st.expander(f'Get Trained-Preditions from database', expanded=False):
         st.header(f'Train :', divider='rainbow')
         # st.dataframe(final_predictions, height=210, hide_index=True, use_container_width=True)
         # st.header(f'Test :', divider='rainbow')
         # st.dataframe(final_metrics, height=210, hide_index=True, use_container_width=True)
 
 with DBAllPreditionsTab10:
-    with st.expander(f'Trained scaled', expanded=False):
+    with st.expander(f'All best model prediction extracted from the database', expanded=False):
         st.header(f'Scaled :', divider='rainbow')
         st.dataframe(X_train_scaled, height=210, hide_index=True, use_container_width=True)
 
-    # with st.expander(f'Predictions : With Encoding', expanded=False):
-    #     st.header(f'Predictions and True values :', divider='rainbow')
-    #     st.dataframe(df_wide, height=210, hide_index=True, use_container_width=True)
+    with st.expander(f'All best model prediction generated after training', expanded=False):
+        st.header(f'Prediction from best model MLRP Scenario 5 :', divider='rainbow')
 
+        # Initialize models and parameter grid
+        models_predict = {
+            'MLPR': MLPRegressor(max_iter=1000)
+        }
 
+        params_predict = {
+            'MLPR': {'hidden_layer_sizes': [(100,), (100, 50)], 'activation': ['relu', 'tanh'],
+                    'learning_rate_init': [0.001, 0.01], 'max_iter': [500, 1000], 'solver': ['adam', 'lbfgs']}
+        }
+
+        def scenario_all_prediction(df):
+            # Initialize label encoders
+            label_encoder_psc = LabelEncoder()
+            label_encoder_qtr = LabelEncoder()
+            
+            # Encode 'PoliceStationCode' and 'Quarter'
+            df['PoliceStationCode'] = label_encoder_psc.fit_transform(df['PoliceStationCode'])
+            df['Quarter'] = label_encoder_qtr.fit_transform(df['Quarter'])
+            
+            # Return both the encoded DataFrame and the label encoders for decoding later
+            label_encoders = {
+                'PoliceStationCode': label_encoder_psc,
+                'Quarter': label_encoder_qtr
+            }
+            
+            return df, label_encoders
+
+        def predict_best_trained_scenario(df_cleaned, model_name='MLPR'):
+            df_cleaned = replace_non_finite_with_median(df_cleaned)
+
+            # Integer Encoding (Scenario 5) - Returns two values now
+            df_encoded, label_encoders = scenario_all_prediction(df_cleaned)
+
+            # Define the feature set (years 2016-2023) and target (2023 for training, predicting 2024)
+            X = df_encoded[['2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023']]
+            y = df_encoded['2023']  # Use 2023 data for training to predict 2024
+
+            # Scale features
+            scaler = StandardScaler()
+            X_scaled = scaler.fit_transform(X)
+
+            # Select the model and parameters (MLPR is chosen as the best)
+            selected_model = models_predict[model_name]  # Accessing the model using model_name from models_predict dictionary
+            param_grid = params_predict[model_name]  # Accessing the parameter grid
+
+            # Hyperparameter tuning with GridSearchCV
+            grid_search = GridSearchCV(selected_model, param_grid, cv=5, n_jobs=-1, scoring='neg_mean_squared_error')
+            grid_search.fit(X_scaled, y)
+
+            # Best model
+            best_model = grid_search.best_estimator_
+
+            # Generate predictions for the entire dataset
+            y_pred = best_model.predict(X_scaled)
+
+            # Prepare the final predictions DataFrame
+            predictions_df = pd.DataFrame({
+                'CrimeCategory': df_encoded['CrimeCategory'],
+                'ProvinceCode': df_encoded['ProvinceCode'],
+                'PoliceStationCode': df_encoded['PoliceStationCode'],
+                'Quarter': df_encoded['Quarter'],
+                'Algorithm': [model_name] * len(y_pred),
+                'Scenario': [scenario_name] * len(y_pred),
+                'Prediction': y_pred,
+                'True_value': y
+            })
+
+            # Reverse integer encoding for clarity
+            for col in label_encoders:
+                predictions_df[col] = label_encoders[col].inverse_transform(df_encoded[col])
+
+             # Save the predictions to the database
+            save_all_prediction_data(predictions_df)
+
+            return predictions_df
+
+        # Call the function and display the results in Streamlit
+        predictions_best_model_df = predict_best_trained_scenario(df_cleaned, model_name='MLPR')
+        st.dataframe(predictions_best_model_df, height=210, hide_index=True, use_container_width=True)
 
 
 with PostHocAnalysisTab3:
     with st.expander('Shapley Post-Hoc Analysis', expanded=False):
         performance_col = st.columns((2, 0.2, 3))
+
+        # Types of Shaplye-Plots: 
+
+        #  1. Summary Plot: Shows the overall feature importance by aggregating Shapley values for all predictions. 
+        #     It helps you understand which features are the most impactful.
+        # ============================================
+        # shap.summary_plot(shap_values, X_full)
+        # ============================================
+
+        # 2. Force Plot: Explains how each feature affects the prediction for a single instance. 
+        #    You can generate force plots for specific predictions.
+        # ============================================
+        # shap.force_plot(explainer.expected_value, shap_values[instance_idx].values, X_full.iloc[instance_idx], matplotlib=True)
+        # ============================================
+
+        # 3. Dependence Plot: Shows how a particular feature affects predictions and its interaction with another feature.
+        # ============================================
+        # shap.dependence_plot("some_feature", shap_values, X_full)
+        # ============================================
+
+
+
 
         # model_trained = XGBRegressor(n_estimators=100, learning_rate=0.01, max_depth=3)
         #  #Prepare the features and the target variable

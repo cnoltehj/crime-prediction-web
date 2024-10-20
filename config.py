@@ -14,7 +14,12 @@ BaseUrl_fetch_predition_province_policestation_quarterly_algorithm = 'http://127
 BaseUrl_fetch_suggest_stats_province_policestation = 'http://127.0.0.1:8080/fetch_stats_province_policestation/?' 
 BaseUrl_fetch_all_stats_policestation_per_province = 'http://127.0.0.1:8080/fetch_stats_province_year_quarterly/?'
 
-BaseUrl_save_prediction_data = 'http://127.0.0.1:8080/add_predictions'
+
+BaseUrl_fetch_training_metrics_data = 'http://127.0.0.1:8080/fetch_training_metrics/' 
+BaseUrl_fetch_training_predition_data ='http://127.0.0.1:8080/fetch_training_predition/?'
+
+BaseUrl_save_trained_prediction_data = 'http://127.0.0.1:8080/add_trianed_predictions/'
+BaseUrl_save_all_prediction_data = 'http://127.0.0.1:8080/add_all_predictions/'
 BaseUrl_save_mertic_data = 'http://127.0.0.1:8080/add_metricss/?'
 
 
