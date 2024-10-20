@@ -66,7 +66,7 @@ st.set_page_config(page_title='ML Model Building', page_icon='🤖', layout='wid
 
 st.title('Interpretable Crime Hotspot Prediction')
 
-AboutTab1,PreditionsTab2,DataExplorationTab3,Transformationtab4,SplitScalerDataTab5, EncodingDataTab6,DBPreditionsTab7,DBMetricsTab8,ModelTrainingTab9,PostHocAnalysisTab10 = st.tabs(['About','Preditions','Data-Exploration','Transformation','Scaler-Split-Data', 'Encoded-Data','DB-Preditions','DB-Metrics','Model-Training','PostHoc-Analysis'])
+AboutTab1,PreditionsUserViewTab2,PostHocAnalysisTab3,DataExplorationTab4,Transformationtab5,SplitScalerDataTab6, EncodingDataTab7,DBTrainedValuesTab8,DBTrainedValuesTab9,DBAllPreditionsTab10 = st.tabs(['About','Preditions-User','PostHocAnalysis','Exploration-Data','Transformation-Data','ScalerSplit-Data', 'Encoded-Data','ModelTraining','DBTrainedValues','DBAllPreditions'])
 
 with AboutTab1:
     with st.expander('About this application'):
@@ -150,7 +150,7 @@ with AboutTab1:
                 # Initialize empty lists for metrics and crime categories
                 crime_categories_list = df_crime_data_db['CrimeCategory'].tolist()
 
-with PreditionsTab2:
+with PreditionsUserViewTab2:
         with st.expander(f'Prediction Values', expanded=False):
             performance_col = st.columns((2, 0.2, 3))
 
@@ -268,10 +268,10 @@ with PreditionsTab2:
                 # Display the graph in Streamlit
                 st.pyplot(plt)
 
-with DataExplorationTab3:
+with DataExplorationTab4:
     st.dataframe(df_suggeted_province_quarterly_data_db) #.sort_values(by='PoliceStationCode'))
 
-with Transformationtab4:
+with Transformationtab5:
     # if identify_outlier:
     with st.expander('Identify outliers', expanded=False):
         performance_col = st.columns((2, 0.2, 3))
@@ -290,36 +290,36 @@ with Transformationtab4:
             df_identify_outliers_melted = df_identify_outliers_db.melt(id_vars=['CrimeCategory', 'ProvinceCode', 'PoliceStationCode', 'Quarter', 'Outliers'],
             var_name='Year', value_name='Percentage')
 
-            # Convert 'Outliers' to list of outlier values
-            def parse_outliers(outliers):
-                if isinstance(outliers, str):
-                    return [float(i) for i in outliers.split(',')]
-                elif isinstance(outliers, (float, int)):
-                    return [float(outliers)]
-                return []
+            # # Convert 'Outliers' to list of outlier values
+            # def parse_outliers(outliers):
+            #     if isinstance(outliers, str):
+            #         return [float(i) for i in outliers.split(',')]
+            #     elif isinstance(outliers, (float, int)):
+            #         return [float(outliers)]
+            #     return []
 
-            df_identify_outliers_melted['Outliers'] = df_identify_outliers_melted['Outliers'].apply(parse_outliers)
+            # df_identify_outliers_melted['Outliers'] = df_identify_outliers_melted['Outliers'].apply(parse_outliers)
 
-            df_exploded = df_identify_outliers_melted.explode('Outliers')
+            # df_exploded = df_identify_outliers_melted.explode('Outliers')
             
-            plt.figure(figsize=(12, 8))
-            # Plotting the boxplot
-            sns.boxplot(x='Year', y='Percentage', data=df_identify_outliers_melted)
-            plt.title("Box Plot Identifying the Outliers")
-            plt.xticks(rotation=45)
+            # plt.figure(figsize=(12, 8))
+            # # Plotting the boxplot
+            # sns.boxplot(x='Year', y='Percentage', data=df_identify_outliers_melted)
+            # plt.title("Box Plot Identifying the Outliers")
+            # plt.xticks(rotation=45)
 
-            # Add annotations for outliers
-            for _, row in df_exploded.iterrows():
-                plt.text(
-                    x=row['Year'],
-                    y=row['Outliers'] + 2,  # Adjust this to fit your plot
-                    s=f"{row['Outliers']:.1f}",
-                    fontsize=9,
-                    color='black',
-                    ha='center'
-                )
+            # # Add annotations for outliers
+            # for _, row in df_exploded.iterrows():
+            #     plt.text(
+            #         x=row['Year'],
+            #         y=row['Outliers'] + 2,  # Adjust this to fit your plot
+            #         s=f"{row['Outliers']:.1f}",
+            #         fontsize=9,
+            #         color='black',
+            #         ha='center'
+            #     )
 
-            st.pyplot(plt)
+            # st.pyplot(plt)
 
         # if replace_outlier:
         #     if not (df_replace_outliers_db.empty and df_identify_outliers_db.empty) and replace_outlier:
@@ -567,13 +567,10 @@ def train_and_predict(df, models, params, scenario_func, scenario_name, original
             'True_value': y_test
         })
 
-        # Revert 'PoliceStationCode' and 'Quarter' to original values
-        #scenario_predictions = revert_labels(scenario_predictions, original_df.loc[y_test.index])
-
         # Store metrics with algorithm and scenario name
         scenario_metrics = pd.DataFrame({
             'Algorithm': [name],
-            'Scenario': [scenario_name] ,
+            'Scenario': [scenario_name],
             'MAE': [mean_absolute_error(y_test, y_pred)],
             'MSE': [mean_squared_error(y_test, y_pred)],
             'R²': [r2_score(y_test, y_pred)],
@@ -581,19 +578,23 @@ def train_and_predict(df, models, params, scenario_func, scenario_name, original
             'ARS': [adjusted_rand_score(y_test, y_pred)]
         })
 
+        # Append the results to the respective lists
         realtime_predictions.append(scenario_predictions)
         realtime_metrics.append(scenario_metrics)
 
-        predictions_df = pd.concat(realtime_predictions, axis=0).reset_index(drop=True)
-        metrics_df = pd.concat(realtime_metrics, axis=0).reset_index(drop=True)
+    # Concatenate all predictions and metrics after the loop ends
+    predictions_df = pd.concat(realtime_predictions, axis=0).reset_index(drop=True)
+    metrics_df = pd.concat(realtime_metrics, axis=0).reset_index(drop=True)
     
-        if not predictions_df.empty:
-            save_prediction_data(predictions_df)
-        if not metrics_df.empty:
-            st.write(metrics_df)
-            save_metric_data(metrics_df)
+    # Save all the predictions and metrics to the database
+    if not predictions_df.empty:
+        save_prediction_data(predictions_df)
+    
+    if not metrics_df.empty:
+        save_metric_data(metrics_df)
 
     return predictions_df, metrics_df
+
 
 # Scenario functions
 def scenario_1(df):
@@ -674,7 +675,15 @@ scenario_funcs = {
              
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-with SplitScalerDataTab5:
+with SplitScalerDataTab6:
+     # Display data info
+    st.header('Input data', divider='rainbow')
+    col = st.columns(4)
+    col[0].metric(label="No. of samples", value=X.shape[0], delta="")
+    col[1].metric(label="No. of X variables", value=X.shape[1], delta="")
+    col[2].metric(label="No. of Training samples", value=X_train.shape[0], delta="")
+    col[3].metric(label="No. of Test samples", value=X_test.shape[0], delta="")
+    
     with st.expander(f'Trained scaled', expanded=False):
         train_col = st.columns((3,1))
         with train_col[0]:
@@ -692,16 +701,32 @@ with SplitScalerDataTab5:
             st.markdown('**y**')
             st.dataframe(y_test, height=210, hide_index=True, use_container_width=True)
 
- 
+with DBTrainedValuesTab8:
+    trainmodel = st.toggle('Train model')
+    if trainmodel:
+        for scenario_name, scenario_func in scenario_funcs.items():
+            for name in models.keys():
+                # Train and predict for each scenario and model
+                scenario_predictions, scenario_metrics = train_and_predict(
+                    df_cleaned, {name: models[name]}, {name: params[name]}, scenario_func, scenario_name, df_cleaned
+                )
 
-with EncodingDataTab6:
+                # Display predictions and metrics for each algorithm and scenario
+                st.markdown(f"### Predictions for {name} under {scenario_name}")
+                st.dataframe(scenario_predictions, height=300, use_container_width=True)
+                
+                st.markdown(f"### Metrics for {name} under {scenario_name}")
+                st.dataframe(scenario_metrics.head(1), height=50, use_container_width=True)
+
+
+with DBTrainedValuesTab9:
     with st.expander(f'Mertics: Encoding', expanded=False):
         st.header(f'Train :', divider='rainbow')
         # st.dataframe(final_predictions, height=210, hide_index=True, use_container_width=True)
         # st.header(f'Test :', divider='rainbow')
         # st.dataframe(final_metrics, height=210, hide_index=True, use_container_width=True)
 
-with DBPreditionsTab7:
+with DBAllPreditionsTab10:
     with st.expander(f'Trained scaled', expanded=False):
         st.header(f'Scaled :', divider='rainbow')
         st.dataframe(X_train_scaled, height=210, hide_index=True, use_container_width=True)
@@ -710,29 +735,10 @@ with DBPreditionsTab7:
     #     st.header(f'Predictions and True values :', divider='rainbow')
     #     st.dataframe(df_wide, height=210, hide_index=True, use_container_width=True)
 
-with DBMetricsTab8:
-    with st.expander(f'Mertics: Encoding', expanded=False):
-        st.header(f'Train :', divider='rainbow')
-        # st.dataframe(final_predictions, height=210, hide_index=True, use_container_width=True)
-        # st.header(f'Test :', divider='rainbow')
-        # st.dataframe(final_metrics, height=210, hide_index=True, use_container_width=True)
 
 
-with ModelTrainingTab9:
-        trainmodel = st.toggle('Train model')
-        if trainmodel:
-                for scenario_name, scenario_func in scenario_funcs.items():
-                    for name in models.keys():
-                        scenario_predictions, scenario_metrics = train_and_predict(df_cleaned, {name: models[name]}, {name: params[name]}, scenario_func, scenario_name, df_cleaned)
-                        
-                        # Display predictions and metrics for each algorithm and scenario
-                        st.markdown(f"### Predictions for {name} under {scenario_name}")
-                        st.dataframe(scenario_predictions, height=300, use_container_width=True)
-                        
-                        st.markdown(f"### Metrics for {name} under {scenario_name}")
-                        st.dataframe(scenario_metrics.head(1), height=50, use_container_width=True)  
 
-with PostHocAnalysisTab10:
+with PostHocAnalysisTab3:
     with st.expander('Shapley Post-Hoc Analysis', expanded=False):
         performance_col = st.columns((2, 0.2, 3))
 
