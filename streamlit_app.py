@@ -69,7 +69,7 @@ st.set_page_config(page_title='ML Model Building', page_icon='🤖', layout='wid
 
 st.title('Interpretable Crime Hotspot Prediction')
 
-AboutTab1,PreditionsUserViewTab2,PostHocAnalysisTab3,DataExplorationTab4,Transformationtab5,SplitScalerDataTab6, EncodingDataTab7,ModelTrainingTab8,DBTrainedValuesTab9,DBAllPreditionsTab10 = st.tabs(['About','Preditions-User','PostHocAnalysis','Exploration-Data','Transformation-Data','ScalerSplit-Data', 'Encoded-Data','ModelTraining','DBTrainedValues','AllPreditions'])
+AboutTab1,PreditionsUserViewTab2,Transformationtab3,SplitScalerDataTab4, EncodingDataTab5,ModelTrainingTab6,DBTrainedValuesTab7,DBAllPreditionsTab8,PostHocAnalysisTab9 = st.tabs(['About','Preditions-User','Transformation-Data','ScalerSplit-Data', 'Encoded-Data','ModelTraining','DBTrainedValues','AllPreditions','PostHocAnalysis'])
 
 with AboutTab1:
     with st.expander('About this application'):
@@ -160,44 +160,66 @@ with PreditionsUserViewTab2:
 
         st.header(f'{province_name}: Predictions vs True_Value', divider='rainbow')
         df_prediction_ui = pd.DataFrame(def_fetch_stats_province_policestation_quarterly_algorithm_db)
-                
-        # Bar plot for Prediction vs True_Value
-        bar_width = 0.35
-        index = range(len(df_prediction_ui))
 
-                # Create the bar plot
-        fig, ax = plt.subplots()
-        bar1 = ax.bar(index, df_prediction_ui['Prediction'], bar_width, label='Prediction', color='b')
-        bar2 = ax.bar([i + bar_width for i in index], df_prediction_ui['True_Value'], bar_width, label='True Value', color='r')
+        performance_col = st.columns((10, 0.8, 0.8))
 
-        ax.set_xlabel('CrimeCategory')
-        ax.set_ylabel('Counts')
-        ax.set_title(f'{province_code_value}: {police_station_name} : Prediction vs True Value')
-        ax.set_xticks([i + bar_width / 2 for i in index])
-        ax.set_xticklabels(df_prediction_ui['CrimeCategory'], rotation=45, ha='right')
-        ax.legend()
+        with performance_col[0]:       
+            # Bar plot for Prediction vs True_Value
+            bar_width = 0.35
+            index = range(len(df_prediction_ui))
 
-                # Display the bar plot in Streamlit
-        st.pyplot(fig)
+                    # Create the bar plot
+            fig, ax = plt.subplots(figsize=(5, 2)) # Adjust width=8 and height=4 as needed
+            bar1 = ax.bar(index, df_prediction_ui['Prediction'], bar_width, label='Prediction', color='b')
+            bar2 = ax.bar([i + bar_width for i in index], df_prediction_ui['True_Value'], bar_width, label='True Value', color='r')
+
+            ax.set_xlabel('CrimeCategory')
+            ax.set_ylabel('Counts')
+            ax.set_title(f'{province_code_value}: {police_station_name} : Prediction vs True Value')
+            ax.set_xticks([i + bar_width / 2 for i in index])
+            ax.set_xticklabels(df_prediction_ui['CrimeCategory'], rotation=45, ha='right',fontsize = 5)
+            ax.legend(fontsize = 5)
+
+            # Add the values on top of the bars
+            for i, v in enumerate(df_prediction_ui['Prediction']):
+                ax.text(i, v + 5, f'{v:.0f} ', ha='center', va='bottom', fontsize=4)  # Add value for Prediction
+
+            for i, v in enumerate(df_prediction_ui['True_Value']):
+                ax.text(i + bar_width, v + 5, f': {v:.0f}', ha='center', va='bottom', fontsize=4)  # Add value for True_Value
+
+
+                    # Display the bar plot in Streamlit
+            st.pyplot(fig)
 
                 #st.header('Predictions plot', divider='rainbow')
                 # Header for the first section
         st.header(f'{province_code_value}: {police_station_name} Police Station : Predictions', divider='rainbow')
         st.dataframe(def_fetch_stats_province_policestation_quarterly_algorithm_db) #.sort_values(by='CrimeCategory'))
+
+        st.header(f'{province_name}: {police_station_name} Police station Initial dataset', divider='rainbow')
+        if not def_fetch_stats_province_policestation_quarterly_algorithm_db.empty:
+            st.dataframe(def_fetch_stats_province_policestation_quarterly_algorithm_db)  # Show the dataframe
+        else:
+            st.write("No data available or API returned an empty result.")
+
+        st.header(f'{province_name}: All initial dataset used for training models', divider='rainbow')
+        st.dataframe(df_suggeted_province_quarterly_data_db) #.sort_values(by='PoliceStationCode'))
+
+        # # Display the heatmap for numerical features in the dataframe
+        # st.header(f'{province_name}: Heatmap of correlation between numerical features')
+
+        # # Create a correlation matrix
+        # correlation_matrix = df_suggeted_province_quarterly_data_db.corr()
+
+        # # Plot the heatmap
+        # fig, ax = plt.subplots(figsize=(10, 6))  # Adjust the size of the heatmap as needed
+        # sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', ax=ax, linewidths=0.5)
+
+        # # Display the heatmap in Streamlit
+        # st.pyplot(fig)
     
-    
 
-with DataExplorationTab4:
-    st.header(f'{province_name}: {police_station_name} Police station Initial dataset', divider='rainbow')
-    if not def_fetch_stats_province_policestation_quarterly_algorithm_db.empty:
-        st.dataframe(def_fetch_stats_province_policestation_quarterly_algorithm_db)  # Show the dataframe
-    else:
-        st.write("No data available or API returned an empty result.")
-
-    st.header(f'{province_name}: All initial dataset used for training models', divider='rainbow')
-    st.dataframe(df_suggeted_province_quarterly_data_db) #.sort_values(by='PoliceStationCode'))
-
-with Transformationtab5:
+with Transformationtab3:
         st.header('Identify outliers', divider='rainbow')
         performance_col = st.columns((2, 0.2, 3))
 
@@ -211,46 +233,75 @@ with Transformationtab5:
             st.header('Outliers percentage plot', divider='rainbow')
             # Melt DataFrame to long format for easy plotting
               # if identify_outlier:
+            # Assuming df_identify_outliers_db is already defined and loaded
             df_identify_outliers_db = identify_outliers_data(df_suggeted_province_quarterly_data_db)
+
+            # Melt the dataframe
             df_identify_outliers_melted = df_identify_outliers_db.melt(id_vars=['CrimeCategory', 'ProvinceCode', 'PoliceStationCode', 'Quarter', 'Outliers'],
-            var_name='Year', value_name='Percentage')
+                                                                    var_name='Year', value_name='Percentage')
 
-            # Convert 'Outliers' to list of outlier values
+            # Convert 'Outliers' column to a list of numeric values
             def parse_outliers(outliers):
-                if isinstance(outliers, str):
-                    return [float(i) for i in outliers.split(',')]
-                elif isinstance(outliers, (float, int)):
-                    return [float(outliers)]
-                return []
+                try:
+                    if isinstance(outliers, str):
+                        return [float(i) for i in outliers.split(',') if i.strip()]  # Ensure no empty or invalid strings
+                    elif isinstance(outliers, (float, int)):
+                        return [float(outliers)]
+                except ValueError:
+                    return []  # Return empty list if conversion fails
 
+                return []  # Fallback for any other cases
+
+            # Apply the function to parse outliers and explode them for plotting
             df_identify_outliers_melted['Outliers'] = df_identify_outliers_melted['Outliers'].apply(parse_outliers)
-
             df_exploded = df_identify_outliers_melted.explode('Outliers')
-            
+
+            # Create the boxplot
             plt.figure(figsize=(12, 8))
-            # Plotting the boxplot
             sns.boxplot(x='Year', y='Percentage', data=df_identify_outliers_melted)
             plt.title("Box Plot Identifying the Outliers")
             plt.xticks(rotation=45)
 
+            # Get the current y-axis limits
+            y_min, y_max = plt.ylim()
+
             # Add annotations for outliers
             for _, row in df_exploded.iterrows():
-                plt.text(
-                    x=row['Year'],
-                    y=row['Outliers'] + 2,  # Adjust this to fit your plot
-                    s=f"{row['Outliers']:.1f}",
-                    fontsize=9,
-                    color='black',
-                    ha='center'
-                )
+                if row['Outliers'] and not pd.isna(row['Outliers']):  # Ensure valid outlier value
+                    # Adjust the text position dynamically based on the y-axis limits
+                    y_text = min(row['Outliers'] + 2, y_max - 5)  # Ensure the text stays within the plot bounds
+                    plt.text(
+                        x=row['Year'],
+                        y=y_text,  # Adjust this value to position the label above the outlier
+                        s=f"{float(row['Outliers']):.1f}",  # Explicitly convert to float for displaying
+                        fontsize=9,
+                        color='black',
+                        ha='center'
+                    )
 
+            # Show the plot in Streamlit
             st.pyplot(plt)
+
 
         # if replace_outlier:
         #     if not (df_replace_outliers_db.empty and df_identify_outliers_db.empty) and replace_outlier:
         st.header('Replaced outliers with the median value', divider='rainbow')
         df_replace_outliers = replace_outliers_data(df_suggeted_province_quarterly_data_db)
         st.dataframe(df_replace_outliers.sort_values(by='PoliceStationCode'), height=210, use_container_width=True)
+
+        df_pivot = df_replace_outliers.pivot_table(index='CrimeCategory', columns='PoliceStationCode', values='2016', aggfunc='sum')
+
+        # Plotting the heatmap
+        plt.figure(figsize=(10, 6))  # Adjust the figure size as necessary
+        sns.heatmap(df_pivot, cmap='coolwarm', annot=True, fmt='.1f')  # 'annot=True' to display the values
+
+        # Set the title and labels
+        plt.title('Heatmap of Crime Categories Across Police Stations', fontsize=14)
+        plt.xlabel('PoliceStationCode', fontsize=12)
+        plt.ylabel('CrimeCategory', fontsize=12)
+
+        # Show the plot in Streamlit
+        st.pyplot(plt)
 
 # Initialize models and parameter grid
 models = {
@@ -482,7 +533,7 @@ scenario_funcs = {
           
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-with SplitScalerDataTab6:
+with SplitScalerDataTab4:
      # Display data info
     st.header('Input data', divider='rainbow')
     col = st.columns(4)
@@ -508,7 +559,7 @@ with SplitScalerDataTab6:
             st.markdown('**y**')
             st.dataframe(y_test, height=210, hide_index=True, use_container_width=True)
 
-with ModelTrainingTab8:
+with ModelTrainingTab6:
     trainmodel = st.toggle('Train model')
     preditionsmodel = st.toggle('Prediction after train the model')
 
@@ -533,7 +584,7 @@ with ModelTrainingTab8:
         # st.dataframe(scenario_predictions, height=300, use_container_width=True)
 
 
-with DBTrainedValuesTab9:
+with DBTrainedValuesTab7:
 
   # Run scenarios
     metrics_scenario = {
@@ -638,7 +689,7 @@ with DBTrainedValuesTab9:
         # st.header(f'Test :', divider='rainbow')
         # st.dataframe(final_metrics, height=210, hide_index=True, use_container_width=True)
 
-with DBAllPreditionsTab10:
+with DBAllPreditionsTab8:
     with st.expander(f'All best model prediction extracted from the database', expanded=False):
         st.header(f'Scaled :', divider='rainbow')
         st.dataframe(X_train_scaled, height=210, hide_index=True, use_container_width=True)
@@ -646,7 +697,7 @@ with DBAllPreditionsTab10:
     with st.expander(f'All best model prediction generated after training', expanded=False):
         st.header(f'Prediction from best model MLRP Scenario 5 :', divider='rainbow')
 
-        # Initialize models and parameter grid
+        # # Initialize models and parameter grid
         models_predict = {
             'MLPR': MLPRegressor(max_iter=1000)
         }
@@ -656,81 +707,11 @@ with DBAllPreditionsTab10:
                     'learning_rate_init': [0.001, 0.01], 'max_iter': [500, 1000], 'solver': ['adam', 'lbfgs']}
         }
 
-        def scenario_all_prediction(df):
-            # Initialize label encoders
-            label_encoder_psc = LabelEncoder()
-            label_encoder_qtr = LabelEncoder()
-            
-            # Encode 'PoliceStationCode' and 'Quarter'
-            df['PoliceStationCode'] = label_encoder_psc.fit_transform(df['PoliceStationCode'])
-            df['Quarter'] = label_encoder_qtr.fit_transform(df['Quarter'])
-            
-            # Return both the encoded DataFrame and the label encoders for decoding later
-            label_encoders = {
-                'PoliceStationCode': label_encoder_psc,
-                'Quarter': label_encoder_qtr
-            }
-            
-            return df, label_encoders
-
-        def predict_best_trained_scenario(df_cleaned, model_name='MLPR'):
-            df_cleaned = replace_non_finite_with_median(df_cleaned)
-
-            # Integer Encoding (Scenario 5) - Returns two values now
-            df_encoded, label_encoders = scenario_all_prediction(df_cleaned)
-
-            # Define the feature set (years 2016-2023) and target (2023 for training, predicting 2024)
-            X = df_encoded[['2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023']]
-            y = df_encoded['2023']  # Use 2023 data for training to predict 2024
-
-            # Scale features
-            scaler = StandardScaler()
-            X_scaled = scaler.fit_transform(X)
-
-            # Select the model and parameters (MLPR is chosen as the best)
-            selected_model = models_predict[model_name]  # Accessing the model using model_name from models_predict dictionary
-            param_grid = params_predict[model_name]  # Accessing the parameter grid
-
-            # Hyperparameter tuning with GridSearchCV
-            grid_search = GridSearchCV(selected_model, param_grid, cv=5, n_jobs=-1, scoring='neg_mean_squared_error')
-            grid_search.fit(X_scaled, y)
-
-            # Best model
-            best_model = grid_search.best_estimator_
-
-            # Generate predictions for the entire dataset
-            y_pred = best_model.predict(X_scaled)
-
-            # Prepare the final predictions DataFrame
-            predictions_df = pd.DataFrame({
-                'CrimeCategory': df_encoded['CrimeCategory'],
-                'ProvinceCode': df_encoded['ProvinceCode'],
-                'PoliceStationCode': df_encoded['PoliceStationCode'],
-                'Quarter': df_encoded['Quarter'],
-                'Algorithm': [model_name] * len(y_pred),
-                'Scenario': [scenario_name] * len(y_pred),
-                'Prediction': y_pred,
-                'True_value': y
-            })
-
-            # Reverse integer encoding for clarity
-            for col in label_encoders:
-                predictions_df[col] = label_encoders[col].inverse_transform(df_encoded[col])
-
-             # Save the predictions to the database
-            save_all_prediction_data(predictions_df)
-
-            return predictions_df
-
-        # Call the function and display the results in Streamlit
-        predictions_best_model_df = predict_best_trained_scenario(df_cleaned, model_name='MLPR')
-        st.dataframe(predictions_best_model_df, height=210, hide_index=True, use_container_width=True)
 
 
-with PostHocAnalysisTab3:
-    with st.expander('Shapley Post-Hoc Analysis', expanded=False):
-        performance_col = st.columns((2, 0.2, 3))
-
+with PostHocAnalysisTab9:
+    st.header(f'Shapley_Values Plots - PostHoc-Analysis :', divider='rainbow')
+    st.write(police_code_value)
         # Types of Shaplye-Plots: 
 
         #  1. Summary Plot: Shows the overall feature importance by aggregating Shapley values for all predictions. 
@@ -749,49 +730,154 @@ with PostHocAnalysisTab3:
         # ============================================
         # shap.dependence_plot("some_feature", shap_values, X_full)
         # ============================================
-
-
-
-
-        # model_trained = XGBRegressor(n_estimators=100, learning_rate=0.01, max_depth=3)
-        #  #Prepare the features and the target variable
-        # X = df_prediction_ui.drop(columns=['Id', 'Prediction', 'True_Value'])  # Drop non-feature columns
-        # y = df_prediction_ui['Prediction']  # Target variable
-
-        # # Assuming 'your_model' is the trained model you are using
-        # # model = your_model  # Your pre-trained model
-
-        # # Create a SHAP explainer
-        # explainer = shap.Explainer(model_trained, X)  # Replace 'model' with your trained model
-
-        # # Calculate SHAP values for the entire dataset
-        # shap_values = explainer(X)
-
-        # # Get unique CrimeTypeNames
-        # crime_types = df_prediction_ui['CrimeTypeName'].unique()
-
-        # # Create a plot for each CrimeTypeName
-        # for crime_type in crime_types:
-        #     st.header(f'SHAP Force Plot for {crime_type}', divider='rainbow')
+    def scenario_all_prediction(df):
+                # Initialize label encoders
+                label_encoder_psc = LabelEncoder()
+                label_encoder_qtr = LabelEncoder()
+                
+                # Encode 'PoliceStationCode' and 'Quarter'
+                df['PoliceStationCode'] = label_encoder_psc.fit_transform(df['PoliceStationCode'])
+                df['Quarter'] = label_encoder_qtr.fit_transform(df['Quarter'])
+                
+                # Return both the encoded DataFrame and the label encoders for decoding later
+                label_encoders = {
+                    'PoliceStationCode': label_encoder_psc,
+                    'Quarter': label_encoder_qtr
+                }
+                
+                return df, label_encoders
             
-        #     # Filter the DataFrame for the current CrimeTypeName
-        #     crime_data = df_prediction_ui[df_prediction_ui['CrimeTypeName'] == crime_type]
+
+                # Function to predict and generate SHAP values
+    def predict_best_trained_shap(df_cleaned, model_name='MLPR'):
+        df_cleaned = replace_non_finite_with_median(df_cleaned)
+
+        # Integer Encoding (Scenario 5)
+        df_encoded, label_encoders = scenario_all_prediction(df_cleaned)
+
+        # Define the feature set (years 2016-2023) and target (2023 for training, predicting 2024)
+        X = df_encoded[['2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023']]
+        y = df_encoded['2023']  # Use 2023 data for training to predict 2024
+
+        # Scale features
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+
+        # Select the model and parameters (MLPR is chosen as the best)
+        selected_model = models_predict[model_name]
+        param_grid = params_predict[model_name]
+
+        # Hyperparameter tuning with GridSearchCV
+        grid_search = GridSearchCV(selected_model, param_grid, cv=5, n_jobs=-1, scoring='neg_mean_squared_error')
+        grid_search.fit(X_scaled, y)
+
+        # Best model
+        best_model = grid_search.best_estimator_
+
+        # Generate predictions for the entire dataset
+        y_pred = best_model.predict(X_scaled)
+
+        # Prepare the final predictions DataFrame
+        predictions_df = pd.DataFrame({
+            'CrimeCategory': df_encoded['CrimeCategory'],
+            'ProvinceCode': df_encoded['ProvinceCode'],
+            'PoliceStationCode': df_encoded['PoliceStationCode'],
+            'Quarter': df_encoded['Quarter'],
+            'Algorithm': [model_name] * len(y_pred),
+            'Scenario': ['Scenario 5'] * len(y_pred),
+            'Prediction': y_pred,
+            'True_value': y
+        })
+
+        # Reverse integer encoding for clarity
+        for col in label_encoders:
+            predictions_df[col] = label_encoders[col].inverse_transform(df_encoded[col])
+
+        # Use shap.kmeans to summarize the background data
+        background = shap.kmeans(X_scaled, 50)  # Reduce background data to 50 clusters
+
+        # Generate Shapley explainer and values
+        explainer = shap.KernelExplainer(best_model.predict, background)
+        shap_values = explainer.shap_values(X_scaled)
+
+        # Return predictions and shap_values
+        return predictions_df, shap_values, explainer, X_scaled, df_encoded
+
+   # Function to create Shapley summary plot
+    def create_summary_plot(shap_values, df_encoded):
+        st.header('Shapley Summary Plot')
+
+        # Use CrimeCategory for feature names
+        feature_names = df_encoded['CrimeCategory'].unique()
+
+        # Create summary plot
+        fig, ax = plt.subplots()
+        shap.summary_plot(shap_values, df_encoded, feature_names=feature_names, show=False)
+        
+        # Display the plot in Streamlit
+        st.pyplot(fig)
+
+
+    def create_force_plot(police_code_value, shap_values, df_encoded, X_scaled, explainer):
+        st.header(f'Shapley Force Plot for {police_code_value}')
+        
+        # Check if the police_code_value exists in the DataFrame
+        matching_rows = df_encoded[df_encoded['PoliceStationCode'] == police_code_value]
+        
+        if not matching_rows.empty:
+            # Get the index of the first matching row
+            station_index = matching_rows.index[0]
             
-        #     # Calculate SHAP values for the filtered data
-        #     crime_X = crime_data.drop(columns=['Id', 'Prediction', 'True_Value'])
-        #     crime_shap_values = explainer(crime_X)
+            # Use 'CrimeCategory' as the x-axis labels instead of features
+            feature_names = df_encoded['CrimeCategory'].unique()
             
-        #     # Plot the force plot for the first instance of the filtered data
-        #     shap.initjs()
-            
-        #     # Display the force plot for the first instance (or any instance you want)
-        #     st.write(f"Force plot for instance index 0 of {crime_type}:")
-        #     force_plot = shap.force_plot(explainer.expected_value, crime_shap_values[0], crime_X.iloc[0], matplotlib=True)
-            
-        #     # Show the force plot in Streamlit
-        #     st.pyplot(plt.gcf())
-            
-        #     # Clear the plot to avoid overlap in Streamlit
-        #     plt.clf()
+            # Create the force plot for prediction vs true value
+            fig, ax = plt.subplots()
+            shap.force_plot(
+                explainer.expected_value, 
+                shap_values[station_index], 
+                X_scaled[station_index], 
+                feature_names=feature_names,  # CrimeCategory as the labels
+                matplotlib=True
+            )
+            st.pyplot(fig)
+        else:
+            # If no matching rows, display a message
+            st.write(f"No data available for the police station code: {police_code_value}")
+
+    # Function to create Shapley decision plot
+    def create_decision_plot(shap_values, df_encoded, explainer):
+        st.header('Shapley Decision Plot')
+
+        # Use CrimeCategory for feature names
+        feature_names = df_encoded['CrimeCategory'].unique()
+
+        # Create decision plot (showing only a subset of the data)
+        fig, ax = plt.subplots()
+        shap.decision_plot(explainer.expected_value, shap_values[:5], df_encoded[:5], 
+                        feature_names=feature_names)
+
+        # Display the plot in Streamlit
+        st.pyplot(fig)
+
+        # Call the function to get predictions and Shapley values
+    predictions_df, shap_values, explainer, X_scaled, df_encoded = predict_best_trained_shap(df_cleaned, model_name='MLPR')
+
+        # Display the predictions in Streamlit
+    st.dataframe(predictions_df, height=210, hide_index=True, use_container_width=True)
+
+    #     # Create Shapley plots
+    # create_summary_plot(shap_values, df_encoded)
+
+    #     #Add a selector for specific police station to show the force plot
+    # police_station_name = st.selectbox('Select Police Station', df_encoded['PoliceStationCode'].unique())
+    # create_force_plot(police_code_value, shap_values, df_encoded, X_scaled, explainer)
+
+    #     # Show decision plot
+    # create_decision_plot(shap_values, df_encoded, explainer)
+
+       
+
+
 
 
