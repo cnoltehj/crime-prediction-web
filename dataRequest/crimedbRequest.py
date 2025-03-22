@@ -513,3 +513,34 @@ def save_metric_data(metrics_df):
             print(f"Timeout Error: {errt}")
         except requests.exceptions.RequestException as err:
             print(f"Error: {err}")
+
+
+def fetch_metrics_best_model_per_scenario_data():
+       
+    endpoint = f"{config. BaseUrl_fetch_metrics_best_model_per_scenario}"
+      
+    try:
+        response = requests.get(endpoint)
+        response.raise_for_status()  # Raise an exception for HTTP errors
+        data = response.json()  # Get the JSON data
+        
+        # Check if the data is in the expected format
+        if isinstance(data, list):
+            # Convert the JSON data to a DataFrame
+            df = pd.DataFrame(data)
+                    
+            return df
+        else:
+            print("Unexpected data format received from the API")
+            return pd.DataFrame()  # Return an empty DataFrame if the data format is unexpected
+    
+    except requests.exceptions.HTTPError as errh:
+        print(f"HTTP Error: {errh}")
+    except requests.exceptions.ConnectionError as errc:
+        print(f"Error Connecting: {errc}")
+    except requests.exceptions.Timeout as errt:
+        print(f"Timeout Error: {errt}")
+    except requests.exceptions.RequestException as err:
+        print(f"Error: {err}")
+    
+    return pd.DataFrame()  # Return an empty DataFrame if there's an error
