@@ -223,9 +223,21 @@ def fetch_predition_province_policestation_year_quarterly_algorithm(provincecode
     
     return pd.DataFrame()  # Return an empty DataFrame if there's an error
 
-def fetch_stats_province_quarterly(provincecode: str, quarter: int):
-    endpoint = f"{config.BaseUrl_fetch_stats_province_quarterly}provincecode={provincecode}&quarter={quarter}"
-    
+def fetch_all_stats_province_quarterly(provincecode: str, quarter: str):
+
+    if(quarter == 'Q1'):
+        quarter = '1'
+    elif(quarter == 'Q2'):
+        quarter = '2'
+    elif(quarter == 'Q3'):
+        quarter = '3'
+    elif(quarter == 'Q4'):
+        quarter = '4'
+
+    endpoint = f"{config.BaseUrl_fetch_all_stats_province_quarterly}provincecode={provincecode}&quarter={int(quarter)}"
+
+    print(endpoint)
+
     try:
         response = requests.get(endpoint)
         response.raise_for_status()  # Raise an exception for HTTP errors
@@ -238,9 +250,9 @@ def fetch_stats_province_quarterly(provincecode: str, quarter: int):
             print(df)
             # Ensure numeric columns are converted to floats, except for specified columns
             for col in df.columns:
-                if col not in ['CrimeCategory', 'ProvinceName', 'StationName']:  # Skip the specified columns
+                if col not in ['CrimeCategory', 'ProvinceCode', 'PoliceStationCode','Quarter']:  # Skip the specified columns
                     df[col] = pd.to_numeric(df[col], errors='coerce')  # Convert to numeric, coercing errors to NaN
-            print(df)
+                    print(df)
             return df
         else:
             print("Unexpected data format received from the API")
