@@ -9,12 +9,14 @@ from sklearn.model_selection import (
     , cross_val_score
     , cross_validate
     )
+from sklearn.base import clone
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.neural_network import MLPRegressor
 from sklearn.svm import SVR
 from xgboost import XGBRegressor
 import altair as alt
+from sklearn.multioutput import MultiOutputRegressor
 import time
 import zipfile
 import matplotlib.pyplot as plt
@@ -291,7 +293,7 @@ with Transformationtab3:
         df_replaced = replace_outliers_data(df_fetch_all_stats_province_quarterly)
         st.dataframe(df_replaced.sort_values(by='PoliceStationCode'), use_container_width=True)
 
-        years = list(range(2016, 2024))  # 2016 through 2023
+        years = list(range(2016, 2023))  # 2016 through 2023
 
         for year in years:
             # 1. Build pivot for the given year
@@ -343,7 +345,47 @@ with ModelTrainingPredictionTab4:
                     'learning_rate_init':[0.001,0.01],'solver':['adam','lbfgs']}
         }
 
-        # 2. Helper for metrics
+        
+        def scenario_1(df):
+            le_psc = LabelEncoder()
+            le_qtr = LabelEncoder()
+            df['PoliceStationCode'] = le_psc.fit_transform(df['PoliceStationCode'])
+            df['Quarter'] = le_qtr.fit_transform(df['Quarter'])
+            return df, le_psc, le_qtr
+
+        def scenario_2(df):
+            onehot_encoder = OneHotEncoder(sparse_output=False)
+            encoded_features = onehot_encoder.fit_transform(df[['PoliceStationCode', 'Quarter']])
+            encoded_df = pd.DataFrame(encoded_features, columns=onehot_encoder.get_feature_names_out(['PoliceStationCode', 'Quarter']))
+            df = pd.concat([df, encoded_df], axis=1).drop(['PoliceStationCode', 'Quarter'], axis=1)
+            return df, None, None
+
+        def scenario_3(df):
+            le_psc = LabelEncoder()
+            df['PoliceStationCode'] = le_psc.fit_transform(df['PoliceStationCode'])
+            onehot_encoder = OneHotEncoder(sparse_output=False)
+            encoded_features = onehot_encoder.fit_transform(df[['Quarter']])
+            encoded_df = pd.DataFrame(encoded_features, columns=onehot_encoder.get_feature_names_out(['Quarter']))
+            df = pd.concat([df, encoded_df], axis=1).drop(['Quarter'], axis=1)
+            return df, le_psc, None
+
+        def scenario_4(df):
+            le_qtr = LabelEncoder()
+            df['Quarter'] = le_qtr.fit_transform(df['Quarter'])
+            onehot_encoder = OneHotEncoder(sparse_output=False)
+            encoded_features = onehot_encoder.fit_transform(df[['PoliceStationCode']])
+            encoded_df = pd.DataFrame(encoded_features, columns=onehot_encoder.get_feature_names_out(['PoliceStationCode']))
+            df = pd.concat([df, encoded_df], axis=1).drop(['PoliceStationCode'], axis=1)
+            return df, None, le_qtr
+
+        def scenario_5(df):
+            le_psc = LabelEncoder()
+            le_qtr = LabelEncoder()
+            df['PoliceStationCode'] = le_psc.fit_transform(df['PoliceStationCode'])
+            df['Quarter'] = le_qtr.fit_transform(df['Quarter'])
+            return df, le_psc, le_qtr
+
+
         def compute_metrics(y_true, y_pred):
             return {
                 'MAE': mean_absolute_error(y_true, y_pred),
@@ -353,176 +395,195 @@ with ModelTrainingPredictionTab4:
                 'MAPE': mean_absolute_percentage_error(y_true, y_pred)
             }
 
-        # 3. Main routine
-        def run_all(df, feature_cols, target_col, scenario_func):
-            # --- Step 1: Save original fields before encoding ---
-            original_fields = df[['CrimeCategory', 'ProvinceCode', 'PoliceStationCode', 'Quarter']].copy()
+        def run_recursive_forecast(df, feature_cols, forecast_years, scenario_func):
+            df = df.copy()
+            df['Quarter_Original'] = df['Quarter']  # Preserve original for display
+            df_encoded, le_psc, le_qtr = scenario_func(df.copy()) if 'scenario' in scenario_func.__name__ else (df.copy(), None, None)
 
-            # --- Step 2: Apply encoding scenario ---
-            df_encoded = scenario_func(df.copy())  # apply scenario
-            encoded_feature_cols = [col for col in df_encoded.columns if col in feature_cols]
+            results = {}
 
-            # --- Step 3: Split dataset ---
-            X = df_encoded[encoded_feature_cols].values
-            y = df_encoded[target_col].values
-            meta = original_fields.copy()
+            # GLOBAL split
+            X_full = df_encoded[feature_cols].values.astype(float)
+            y_full = df_encoded[feature_cols[-1]].values.astype(float)
 
-            X_train, X_temp, y_train, y_temp, meta_train, meta_temp = train_test_split(X, y, meta, test_size=0.4, random_state=42)
-            X_val, X_test, y_val, y_test, meta_val, meta_test = train_test_split(X_temp, y_temp, meta_temp, test_size=0.5, random_state=42)
+            X_temp, X_test, y_temp, y_test = train_test_split(X_full, y_full, test_size=0.20, random_state=42)
+            X_train, X_val, y_train, y_val = train_test_split(X_temp, y_temp, test_size=0.25, random_state=42)  # 0.25 * 0.8 = 0.20
 
-            # --- Step 4: Scale (MinMax then Standard) ---
-            minmax_scaler = MinMaxScaler()
-            X_train = minmax_scaler.fit_transform(X_train)
-            X_val = minmax_scaler.transform(X_val)
-            X_test = minmax_scaler.transform(X_test)
+            scaler = MinMaxScaler()
+            X_train_scaled = scaler.fit_transform(X_train)
+            X_val_scaled = scaler.transform(X_val)
+            X_test_scaled = scaler.transform(X_test)
 
-            std_scaler = StandardScaler()
-            X_train = std_scaler.fit_transform(X_train)
-            X_val = std_scaler.transform(X_val)
-            X_test = std_scaler.transform(X_test)
-
-            # --- Step 5: Cross-validation ---
-            cv = KFold(n_splits=3, shuffle=True, random_state=42)
-
-            # --- Step 6: Grid Search & Prediction ---
-            all_results = {}
-            for name, model in models.items():
-                gs = GridSearchCV(model, params[name], cv=cv, scoring='neg_mean_squared_error', n_jobs=-1)
-                gs.fit(X_train, y_train)
-                best = gs.best_estimator_
+            for model_name, model in models.items():
+                try:
+                    # GridSearchCV + KFold
+                    kfold = KFold(n_splits=5, shuffle=True, random_state=42)
+                    gs = GridSearchCV(model, params[model_name], cv=kfold, scoring='neg_mean_squared_error', n_jobs=-1)
+                    gs.fit(X_train_scaled, y_train)
+                    best_model = gs.best_estimator_
+                except Exception as e:
+                    st.error(f"Error in model training ({model_name}): {e}")
+                    continue
 
                 # Predictions
-                y_tr_pred = best.predict(X_train)
-                y_val_pred = best.predict(X_val)
-                y_te_pred = best.predict(X_test)
+                y_train_pred = best_model.predict(X_train_scaled)
+                y_val_pred = best_model.predict(X_val_scaled)
+                y_test_pred = best_model.predict(X_test_scaled)
 
-                # --- Step 7: Store with original categorical fields ---
-                train_df = meta_train.copy()
-                train_df['True'] = y_train
-                train_df['Pred'] = y_tr_pred
+                train_df = pd.DataFrame({'True': y_train, 'Predicted': y_train_pred})
+                val_df = pd.DataFrame({'True': y_val, 'Predicted': y_val_pred})
+                test_df = pd.DataFrame({'True': y_test, 'Predicted': y_test_pred})
 
-                val_df = meta_val.copy()
-                val_df['True'] = y_val
-                val_df['Pred'] = y_val_pred
+                train_metrics = compute_metrics(y_train, y_train_pred)
+                val_metrics = compute_metrics(y_val, y_val_pred)
+                test_metrics = compute_metrics(y_test, y_test_pred)
 
-                test_df = meta_test.copy()
-                test_df['True'] = y_test
-                test_df['Pred'] = y_te_pred
+                # --- FORECASTING ---
+                preds_all_rows = []
+                for idx, row in df_encoded.iterrows():
+                    row_dict = {
+                        'CrimeCategory': df.loc[idx, 'CrimeCategory'],
+                        'ProvinceCode': df.loc[idx, 'ProvinceCode'],
+                        'PoliceStationCode': df.loc[idx, 'PoliceStationCode'],
+                        'Quarter': df.loc[idx, 'Quarter_Original']
+                    }
 
-                # --- Step 8: Store metrics and results ---
-                all_results[name] = {
-                    'train_pred': train_df,
-                    'val_pred': val_df,
-                    'test_pred': test_df,
-                    'train_metrics': compute_metrics(y_train, y_tr_pred),
-                    'val_metrics': compute_metrics(y_val, y_val_pred),
-                    'test_metrics': compute_metrics(y_test, y_te_pred)
+                    if row[feature_cols].isnull().any():
+                        continue
+
+                    try:
+                        feature_values = row[feature_cols].values.astype(float).reshape(1, -1)
+                        scaler_row = MinMaxScaler()
+                        feature_scaled = scaler_row.fit_transform(feature_values)
+
+                        prev_years_scaled = feature_scaled.flatten().tolist()
+
+                        for year in forecast_years:
+                            input_vals = np.array(prev_years_scaled[-len(feature_cols):]).reshape(1, -1)
+                            pred_scaled = best_model.predict(input_vals)[0]
+
+                            prev_years_scaled.append(pred_scaled)
+                            temp_all_years = np.array(prev_years_scaled[-len(feature_cols):]).reshape(1, -1)
+                            pred_unscaled = scaler_row.inverse_transform(temp_all_years)[0, -1]
+                            row_dict[f"{year}_Pred"] = pred_unscaled
+
+                            if len(preds_all_rows) > 0:
+                                prev_val = preds_all_rows[-1].get(f"{year-1}_Pred", np.nan)
+                                if not pd.isna(prev_val):
+                                    row_dict[f"Diff_{year}"] = ((prev_val - pred_unscaled) / prev_val) * 100
+                                else:
+                                    row_dict[f"Diff_{year}"] = np.nan
+                            else:
+                                row_dict[f"Diff_{year}"] = np.nan
+
+                    except Exception as e:
+                        print(f"Error forecasting row {idx}: {e}")
+                        for year in forecast_years:
+                            row_dict[f"{year}_Pred"] = np.nan
+                            row_dict[f"Diff_{year}"] = np.nan
+
+                    preds_all_rows.append(row_dict)
+
+                preds_df = pd.DataFrame(preds_all_rows)
+
+                if le_psc and pd.api.types.is_integer_dtype(preds_df['PoliceStationCode']):
+                    preds_df['PoliceStationCode'] = le_psc.inverse_transform(preds_df['PoliceStationCode'])
+
+                results[model_name] = {
+                    'future_preds': preds_df,
+                    'train_df': train_df,
+                    'val_df': val_df,
+                    'test_df': test_df,
+                    'metrics': {
+                        'Train': train_metrics,
+                        'Validation': val_metrics,
+                        'Test': test_metrics
+                    }
                 }
 
-            return all_results
+            return results
 
 
-        # 4. Usage & display in Streamlit
-        df = df_fetch_all_stats_province_quarterly
-        feature_cols = [str(y) for y in range(2016, 2023)]
-        target_col = '2023'
+        # ---- MAIN EXECUTION ----
+        df = df_fetch_all_stats_province_quarterly.copy()
+        feature_cols = [str(y) for y in range(2016, 2023)]  # 2016–2022
+        forecast_years = [2024, 2025, 2026]
 
-        def scenario_1(df):
-            label_encoder_psc = LabelEncoder()
-            label_encoder_qtr = LabelEncoder()
-            df['PoliceStationCode'] = label_encoder_psc.fit_transform(df['PoliceStationCode'])
-            df['Quarter'] = label_encoder_qtr.fit_transform(df['Quarter'])
-            return df
-
-        def scenario_2(df):
-            onehot_encoder = OneHotEncoder(sparse_output=False)
-            encoded_features = onehot_encoder.fit_transform(df[['PoliceStationCode', 'Quarter']])
-            encoded_df = pd.DataFrame(encoded_features, columns=onehot_encoder.get_feature_names_out(['PoliceStationCode', 'Quarter']))
-            df = pd.concat([df, encoded_df], axis=1).drop(['PoliceStationCode', 'Quarter'], axis=1)
-            return df
-
-        def scenario_3(df):
-            label_encoder_psc = LabelEncoder()
-            onehot_encoder = OneHotEncoder(sparse_output=False)
-            df['PoliceStationCode'] = label_encoder_psc.fit_transform(df['PoliceStationCode'])
-            encoded_features = onehot_encoder.fit_transform(df[['Quarter']])
-            encoded_df = pd.DataFrame(encoded_features, columns=onehot_encoder.get_feature_names_out(['Quarter']))
-            df = pd.concat([df, encoded_df], axis=1).drop(['Quarter'], axis=1)
-            return df
-
-        def scenario_4(df):
-            label_encoder_qtr = LabelEncoder()
-            onehot_encoder = OneHotEncoder(sparse_output=False)
-            df['Quarter'] = label_encoder_qtr.fit_transform(df['Quarter'])
-            encoded_features = onehot_encoder.fit_transform(df[['PoliceStationCode']])
-            encoded_df = pd.DataFrame(encoded_features, columns=onehot_encoder.get_feature_names_out(['PoliceStationCode']))
-            df = pd.concat([df, encoded_df], axis=1).drop(['PoliceStationCode'], axis=1)
-            return df
-
-        def scenario_5(df):
-            label_encoder_psc = LabelEncoder()
-            label_encoder_qtr = LabelEncoder()
-            df['PoliceStationCode'] = label_encoder_psc.fit_transform(df['PoliceStationCode'])
-            df['Quarter'] = label_encoder_qtr.fit_transform(df['Quarter'])
-            return df
-
-        # --- 2. Now you can define the scenario dictionary safely ---
         scenarios = {
             "Scenario 1": scenario_1,
             "Scenario 2": scenario_2,
             "Scenario 3": scenario_3,
             "Scenario 4": scenario_4,
             "Scenario 5": scenario_5
-            }
+        }
+
+        crime_categories = df['CrimeCategory'].unique()
 
         for label, func in scenarios.items():
-            st.title(f"{label} - Label & OneHot Encoding")
-            results = run_all(df, feature_cols, target_col, func)
+            for cat in crime_categories:
+                st.title(f"{label} - Recursive Forecasting with Evaluation: {cat}")
+                df_cat = df[df['CrimeCategory'] == cat].reset_index(drop=True)
 
-            for alg, res in results.items():
-                st.subheader(f"**{alg}**")
-                performance_col = st.columns((2, 2, 2))
-                with performance_col[0]:
-                    st.markdown("**Train Predictions**")
-                    st.dataframe(res['train_pred'])
-                with performance_col[1]:
-                    st.markdown("**Validation Predictions**")
-                    st.dataframe(res['val_pred'])
-                with performance_col[2]:
-                    st.markdown("**Test Predictions**")
-                    st.dataframe(res['test_pred'])
+                if df_cat.shape[0] < 10:
+                    st.warning(f"Not enough data for category: {cat}")
+                    continue
 
-                st.markdown("**Metrics**")
-                st.json({
-                    "Train": res['train_metrics'],
-                    "Validation": res['val_metrics'],
-                    "Test": res['test_metrics']
-                })
+                results = run_recursive_forecast(df_cat, feature_cols, forecast_years, func)
 
-                st.markdown("---")
+                for alg, res in results.items():
+                    st.subheader(f"{alg} - Forecasts")
+                    st.dataframe(res['future_preds'])
 
+                    # === Metrics Bar Plot ===
+                    st.markdown("### Evaluation Metrics (Bar Plot)")
+                    metrics_df = pd.DataFrame(res['metrics']).T  # Transpose for bar plot
+                    st.bar_chart(metrics_df)
 
-with ModelTrainingValidationTab5:
-        st.header(f'Model Training Validation', divider='rainbow')
+                    # === Heatmaps for each forecast year ===
+                    for year in forecast_years:
+                        st.markdown(f"### Heatmap: {year} Forecasts per Police Station")
+                        heat_data = res['future_preds'].pivot_table(
+                            index='PoliceStationCode',
+                            columns='Quarter',
+                            values=f"{year}_Pred",
+                            aggfunc='mean'
+                        )
+                        fig, ax = plt.subplots(figsize=(10, 6))
+                        sns.heatmap(heat_data, cmap='YlGnBu', annot=False, ax=ax)
+                        ax.set_title(f"{year} Predictions Heatmap")
+                        st.pyplot(fig)
 
-        for alg, res in results.items():
-            st.subheader(f"**{alg}**")
+                    # === Optional: View prediction breakdowns ===
+                    st.markdown("### Train / Validation / Test Predictions")
+                    prediction_col = st.columns(3)
+                    with prediction_col[0]:
+                        st.markdown("**Train**")
+                        st.dataframe(res['train_df'])
 
-            st.markdown("**Validation Metrics**")
-            st.json(res['val_metrics'])
+                    with prediction_col[1]:
+                        st.markdown("**Validation**")
+                        st.dataframe(res['val_df'])
 
-            st.markdown("---")
+                    with prediction_col[2]:
+                        st.markdown("**Test**")
+                        st.dataframe(res['test_df'])
 
+                    st.markdown("---")
 
-with ModelTrainingMerticsTab6:
-        st.header(f'Model Training Metrics', divider='rainbow')
-        for alg, res in results.items():
-            st.subheader(f"**{alg}**")
+        with ModelTrainingMerticsTab6:
+                st.header(f'Model Training Metrics', divider='rainbow')
+                for alg, res in results.items():
+                    st.subheader(f"**{alg}**")
 
-            st.markdown("**Test Metrics**")
-            st.json(res['test_metrics'])
+                    st.markdown("### Evaluation Metrics")
+                    st.write("**Train**")
+                    st.json(res['metrics']['Train'])
+                    st.write("**Validation**")
+                    st.json(res['metrics']['Validation'])
+                    st.write("**Test**")
+                    st.json(res['metrics']['Test'])
 
-            st.markdown("---")
+                    st.markdown("---")
 
 
 with PostHocAnalysisTab7:
